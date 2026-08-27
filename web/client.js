@@ -238,8 +238,113 @@ window.__ModuleLoader__.load({
       el.style.opacity = "1";
       el.style.transform = "translateX(0)";
       el._timer = window.setTimeout(() => dismissToast(el), 6000);
-      // C3 起:点击主体展开右侧消息列表(由 openNotifyDrawer 接线)。
+      el.addEventListener("click", () => {
+        window.clearTimeout(el._timer);
+        openNotifyDrawer();
+      });
       return el;
+    }
+
+    // ── 右侧消息列表面板(点击 toast 展开;纯前端 DOM,零资产) ------------------
+    // 覆盖层 + 右侧滑入面板:列出缓存里的回合结束消息(时间、会话摘要),空态
+    // 提示;通过 subscribeNotify 订阅缓存变更实时重绘。点击遮罩或 × 关闭。
+    let drawerHost = null;
+    let drawerUnsub = null;
+    function closeNotifyDrawer() {
+      if (drawerUnsub) { drawerUnsub(); drawerUnsub = null; }
+      if (!drawerHost || !document.body.contains(drawerHost)) { drawerHost = null; return; }
+      const overlay = drawerHost;
+      const panel = overlay._panel;
+      panel.style.transform = "translateX(100%)";
+      overlay.style.opacity = "0";
+      window.setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        if (drawerHost === overlay) drawerHost = null;
+      }, 240);
+    }
+    function renderDrawerList(container) {
+      container.textContent = "";
+      const list = loadNotifyCache();
+      if (!list.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "暂无回合结束消息";
+        Object.assign(empty.style, {
+          padding: "40px 16px", textAlign: "center",
+          color: "rgba(0,0,0,0.40)", fontSize: 13,
+        });
+        container.appendChild(empty);
+        return;
+      }
+      list.forEach((m) => {
+        const row = document.createElement("div");
+        Object.assign(row.style, { padding: "12px 16px", borderBottom: "1px solid rgba(0,0,0,0.07)" });
+        const timeEl = document.createElement("div");
+        timeEl.textContent = m.timeText;
+        Object.assign(timeEl.style, { fontSize: 12.5, fontWeight: 600 });
+        const subEl = document.createElement("div");
+        subEl.textContent = m.sessionId ? "会话 " + String(m.sessionId).slice(0, 12) + "…" : "回合结束";
+        Object.assign(subEl.style, { fontSize: 12, color: "rgba(0,0,0,0.55)", marginTop: 3 });
+        row.appendChild(timeEl);
+        row.appendChild(subEl);
+        container.appendChild(row);
+      });
+    }
+    function openNotifyDrawer() {
+      if (drawerHost && document.body.contains(drawerHost)) { closeNotifyDrawer(); return; }
+      const overlay = document.createElement("div");
+      Object.assign(overlay.style, {
+        position: "fixed", inset: 0, zIndex: 2147483001,
+        background: "rgba(0,0,0,0.28)",
+        pointerEvents: "auto", opacity: 0,
+        transition: "opacity 0.2s ease",
+      });
+      overlay.addEventListener("click", closeNotifyDrawer);
+      const panel = document.createElement("div");
+      Object.assign(panel.style, {
+        position: "absolute", top: 0, right: 0, height: "100%", width: 380, maxWidth: "92vw",
+        background: "rgba(250,250,250,0.96)",
+        backdropFilter: "blur(20px) saturate(1.3)",
+        WebkitBackdropFilter: "blur(20px) saturate(1.3)",
+        boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
+        transform: "translateX(100%)",
+        transition: "transform 0.22s ease",
+        display: "flex", flexDirection: "column",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif",
+        color: "#1f1f1f",
+      });
+      const header = document.createElement("div");
+      Object.assign(header.style, {
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 16px", borderBottom: "1px solid rgba(0,0,0,0.08)",
+        flexShrink: 0,
+      });
+      const titleEl = document.createElement("span");
+      titleEl.textContent = "回合结束消息";
+      Object.assign(titleEl.style, { fontSize: 15, fontWeight: 600 });
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.textContent = "×";
+      Object.assign(closeBtn.style, {
+        border: "none", background: "transparent", cursor: "pointer",
+        fontSize: 18, lineHeight: 1, padding: "2px 8px", borderRadius: 6,
+        color: "rgba(0,0,0,0.55)",
+      });
+      closeBtn.addEventListener("click", (ev) => { ev.stopPropagation(); closeNotifyDrawer(); });
+      header.appendChild(titleEl);
+      header.appendChild(closeBtn);
+      const listEl = document.createElement("div");
+      Object.assign(listEl.style, { flex: 1, overflowY: "auto", padding: "6px 0" });
+      panel.appendChild(header);
+      panel.appendChild(listEl);
+      overlay.appendChild(panel);
+      document.body.appendChild(overlay);
+      overlay._panel = panel;
+      drawerHost = overlay;
+      renderDrawerList(listEl);
+      drawerUnsub = subscribeNotify(() => renderDrawerList(listEl));
+      void overlay.offsetHeight;
+      overlay.style.opacity = "1";
+      panel.style.transform = "translateX(0)";
     }
 
 // ── 命名空间快照 → 信号检测 → 播放 ------------------------------------------
