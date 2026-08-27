@@ -63,11 +63,11 @@ browser).
 
 ## Screenshots
 
-![Browser tab: the ding is played entirely by front-end JS (Web Audio API)](assets/agent-finish-ding.png)
+![Settings page: the **ding** (回合结束提示音) section, live-editable controls](assets/setting-ding.png)
 
-*Agent round finishes: the browser client mirrors the `done` signal and
-synthesizes a short "ding" through the tab; no backend audio, no OS
-notification.*
+*Settings page: the **回合结束提示音** section. Master switch, volume,
+frequency and decay length are all live-editable without a restart, with a
+**试听** (preview) button to warm the browser AudioContext.*
 
 ---
 

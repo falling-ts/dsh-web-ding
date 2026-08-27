@@ -58,10 +58,10 @@ dsh plugin --profile web add /path/to/dsh-web-ding
 
 ## 效果截图
 
-![浏览器标签页——"叮"完全由前端 JS(Web Audio API)合成播放](assets/agent-finish-ding.png)
+![设置页——「回合结束提示音」分区,各旋钮免重启实时可调](assets/setting-ding.png)
 
-*agent 回合结束——浏览器端镜像到 `done` 信号后在标签页里合成一声短"叮";
-不经过后端发声,也不弹系统通知。*
+*设置页——「回合结束提示音」分区:总开关、音量、频率、衰减时长全部免重启
+实时可调,并带"试听"按钮预热浏览器 AudioContext。*
 
 ---
 
