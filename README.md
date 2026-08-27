@@ -35,6 +35,8 @@ Requires the web app to ship the client bundle (the `dsh.client` declaration in
 | `freq` | number 80..4000 | `880` | Fundamental frequency of the ding (Hz). |
 | `decayMs` | number 100..4000 | `900` | Tone decay length (ms). |
 
+Every session's agent turn end (transition to idle) rings; repeated idle ticks of an already-idle session and brand-new sessions that never ran stay silent.
+
 You can also adjust these from the **设置 → 回合结束提示音** panel, which
 includes a "试听" (preview) button.
 

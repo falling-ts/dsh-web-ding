@@ -140,7 +140,11 @@ window.__ModuleLoader__.load({
     const inputRangeStyle = { flex: 1, minWidth: 140 };
 
     function DingSection(props) {
-      const { snap, update, play } = props;
+      // The renderer binds the injected hooks compartment ('ding' key) into a
+      // use<Name> hook; the store is the bare observable, so a selector reads
+      // its latest snapshot (the sanctioned client pattern, see force-compact).
+      const { update, play } = props;
+      const snap = props.useDing((s) => s);
       const value = snap.value;
       const ph = hintStyle;
       if (snap.status === "unavailable") {
