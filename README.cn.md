@@ -13,7 +13,9 @@ Node/后端从不发声,也不走 Windows/系统通知。
 | 层 | 行为 |
 |----|------|
 | Host(`index.js` + `src/`) | 监听 `agent/status` 的 **idle 转变**(全部轮次与子代理结束、下一次人为对话之前;新建会话从未运行过的首次 idle 与重复 idle tick 都保持静默)。向 `falling-ts-web-ding` 设置命名空间写入 `{ phase:'done', at, sessionId }`。绝不发声、绝不调用系统。 |
-| 浏览器(`web/client.js`) | 经 `settingsScope` 实时镜像命名空间;收到 `at` 严格更新的 `done` 信号后用 Web Audio API 合成一声短"叮"(三个正弦振荡器 + 指数衰减包络),经标签页播放。 |
+| 浏览器(`web/client.js`) | 经 `settingsScope` 实时镜像命名空间;收到 `at` 严格更新的 `done` 信号后用 Web Audio API 合成一声短"叮",经标签页播放——同一瞬间在右下角弹出 Win11 风格 toast。点击 toast 展开右侧消息列表,展示全部回合结束消息(存在浏览器 localStorage,上限 100、按 signal `at` 去重),支持单条删除与全部删除。全程纯前端:后端不发声、不弹系统通知。 |
+
+除了提示音,每次回合结束还会在右下角弹出一条 Win11 风格 toast(6 秒自动消失)。点击它即可打开右侧消息列表:最近 100 条回合结束消息保存在浏览器 localStorage(键 falling-ts-web-ding.notify.v1),每条可单独删除,顶部"全部删除"按钮一键清空。消息记录纯前端——Host 不读也不写。
 
 ## 安装
 

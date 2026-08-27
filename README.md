@@ -15,7 +15,7 @@ a pure-listener Host half + a browser client half connected by the official
 | Layer | What happens |
 |-------|--------------|
 | Host (`index.js` + `src/`) | Listens for the `agent/status` **idle transition** (all turns done, including sub-agents, before the next human turn; a fresh idle session that never ran, and repeated idle ticks, stay silent). Publishes `{ phase:'done', at, sessionId }` into the `falling-ts-web-ding` settings namespace. Never emits audio, never calls the OS. |
-| Browser (`web/client.js`) | Mirrors the namespace live via `settingsScope`. On a strictly-newer `done` signal it synthesizes a short `ding` (three sine oscillators + exponential decay envelopes) with the Web Audio API and plays it through the tab. |
+| Browser (`web/client.js`) | Mirrors the namespace live via `settingsScope`. On a strictly-newer `done` signal it synthesizes a short `ding` (three sine oscillators + exponential decay envelopes) with the Web Audio API and plays it through the tab — and, at the same moment, pops a Win11-style toast in the bottom-right corner. Clicking the toast slides in a notification drawer listing every turn-end message (kept in browser `localStorage`, capped at 100, deduped by signal `at`), with per-message delete and a clear-all button. Everything stays front-end: no backend audio, no OS notification. |
 
 ## Install
 
@@ -36,6 +36,13 @@ Requires the web app to ship the client bundle (the `dsh.client` declaration in
 | `decayMs` | number 100..4000 | `900` | Tone decay length (ms). |
 
 Every session's agent turn end (transition to idle) rings; repeated idle ticks of an already-idle session and brand-new sessions that never ran stay silent.
+
+Besides the ring, each turn end drops a bottom-right toast (Win11-style,
+auto-dismisses after 6 s). Click it to open the right-side notification
+drawer: the last 100 turn-end messages are kept in the browser's
+`localStorage` (key `falling-ts-web-ding.notify.v1`), each row can be
+deleted individually, and a "全部删除" button clears them all. The message
+log is front-end only — the Host never reads or writes it.
 
 You can also adjust these from the **设置 → 回合结束提示音** panel, which
 includes a "试听" (preview) button.
