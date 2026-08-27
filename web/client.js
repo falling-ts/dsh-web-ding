@@ -150,6 +150,98 @@ window.__ModuleLoader__.load({
       emitNotifyChange();
     }
 
+    // ── 右下角通知弹窗(Win11 风格,纯内联样式/零资产) --------------------------
+    // 回合结束 ding 的同时弹出;6 秒自动消失,可手动关闭。点击主体在 C3 起
+    // 展开右侧消息列表。所有样式内联,不引入任何图片/CSS 资产。
+    const TOAST_TINT = "linear-gradient(135deg, rgba(0,120,212,0.16), rgba(0,120,212,0.05))";
+    let toastLayer = null;
+    function ensureToastLayer() {
+      if (toastLayer && document.body.contains(toastLayer)) return toastLayer;
+      toastLayer = document.createElement("div");
+      Object.assign(toastLayer.style, {
+        position: "fixed", right: "16px", bottom: "16px", zIndex: 2147483000,
+        display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px",
+        pointerEvents: "none",
+      });
+      document.body.appendChild(toastLayer);
+      return toastLayer;
+    }
+    function dismissToast(el) {
+      el.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+      el.style.opacity = "0";
+      el.style.transform = "translateX(24px)";
+      window.setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
+    }
+    function showTurnEndToast(msg) {
+      const layer = ensureToastLayer();
+      const d = new Date(msg.at);
+      const pad = (n) => String(n).padStart(2, "0");
+      const timeText = msg.timeText ||
+        (d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+          " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()));
+      const el = document.createElement("div");
+      Object.assign(el.style, {
+        pointerEvents: "auto", position: "relative", width: 340, minHeight: 84,
+        background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(18px) saturate(1.4)",
+        border: "1px solid rgba(0,0,0,0.10)", borderRadius: 10,
+        boxShadow: "0 8px 28px rgba(0,0,0,0.18)", overflow: "hidden",
+        display: "flex", alignItems: "stretch", cursor: "pointer",
+        opacity: "0", transform: "translateX(24px)",
+        transition: "opacity 0.25s ease, transform 0.25s ease",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif",
+        color: "#1f1f1f", fontSize: 13,
+      });
+      const accent = document.createElement("div");
+      Object.assign(accent.style, {
+        width: 4, flexShrink: 0, background: "#0078d4",
+      });
+      const body = document.createElement("div");
+      Object.assign(body.style, { padding: "12px 14px 14px", minWidth: 0 });
+      const head = document.createElement("div");
+      Object.assign(head.style, {
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+      });
+      const title = document.createElement("span");
+      title.textContent = "回合结束";
+      Object.assign(title.style, { fontSize: 13.5, fontWeight: 600 });
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.textContent = "×";
+      Object.assign(closeBtn.style, {
+        border: "none", background: "transparent", cursor: "pointer",
+        fontSize: 16, lineHeight: 1, padding: "2px 6px", borderRadius: 6,
+        color: "rgba(0,0,0,0.55)",
+      });
+      closeBtn.addEventListener("mouseenter", () => { closeBtn.style.background = "rgba(0,0,0,0.08)"; });
+      closeBtn.addEventListener("mouseleave", () => { closeBtn.style.background = "transparent"; });
+      closeBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        window.clearTimeout(el._timer);
+        dismissToast(el);
+      });
+      head.appendChild(title);
+      head.appendChild(closeBtn);
+      const text = document.createElement("div");
+      text.textContent = "agent 已完成回合——浏览器播放一声“叮”。";
+      Object.assign(text.style, { marginTop: 6, lineHeight: 1.5, color: "rgba(0,0,0,0.62)" });
+      const foot = document.createElement("div");
+      foot.textContent = timeText + (msg.sessionId ? "  ·  " + String(msg.sessionId).slice(0, 12) + "…" : "");
+      Object.assign(foot.style, { marginTop: 8, fontSize: 11.5, color: "rgba(0,0,0,0.42)" });
+      body.appendChild(head);
+      body.appendChild(text);
+      body.appendChild(foot);
+      el.appendChild(accent);
+      el.appendChild(body);
+      layer.appendChild(el);
+      void el.offsetHeight; // force reflow → 触发进入动画
+      el.style.opacity = "1";
+      el.style.transform = "translateX(0)";
+      el._timer = window.setTimeout(() => dismissToast(el), 6000);
+      // C3 起:点击主体展开右侧消息列表(由 openNotifyDrawer 接线)。
+      return el;
+    }
+
 // ── 命名空间快照 → 信号检测 → 播放 ------------------------------------------
     // lastAt:本页面最后响应过的 signal.at。首帧(页面加载时已存在的残留)只做
     // 基线、不播放;之后 at 严格增长的新 'done' 信号才叮一声。
@@ -168,7 +260,9 @@ window.__ModuleLoader__.load({
       lastAt = at;
       if (value.enabled !== false) {
         playDing({ volume: value.volume, freq: value.freq, decayMs: value.decayMs });
-        recordTurnEnd(at, typeof sig.sessionId === "string" ? sig.sessionId : undefined);
+        const msg = { at, sessionId: typeof sig.sessionId === "string" ? sig.sessionId : undefined };
+        recordTurnEnd(at, msg.sessionId);
+        showTurnEndToast(msg);
       }
     }
 
