@@ -149,6 +149,22 @@ window.__ModuleLoader__.load({
       saveNotifyCache();
       emitNotifyChange();
     }
+    /** 删除单条"回合结束"消息(按 at 匹配)。 */
+    function removeRecord(at) {
+      const list = loadNotifyCache();
+      const next = list.filter((m) => m.at !== at);
+      if (next.length === list.length) return;
+      notifyCache = next;
+      saveNotifyCache();
+      emitNotifyChange();
+    }
+    /** 清空全部"回合结束"消息。 */
+    function clearAllRecords() {
+      if (!loadNotifyCache().length) return;
+      notifyCache = [];
+      saveNotifyCache();
+      emitNotifyChange();
+    }
 
     // ── 右下角通知弹窗(Win11 风格,纯内联样式/零资产) --------------------------
     // 回合结束 ding 的同时弹出;6 秒自动消失,可手动关闭。点击主体在 C3 起
@@ -277,15 +293,31 @@ window.__ModuleLoader__.load({
       }
       list.forEach((m) => {
         const row = document.createElement("div");
-        Object.assign(row.style, { padding: "12px 16px", borderBottom: "1px solid rgba(0,0,0,0.07)" });
+        Object.assign(row.style, {
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "12px 16px", borderBottom: "1px solid rgba(0,0,0,0.07)",
+        });
+        const info = document.createElement("div");
+        Object.assign(info.style, { flex: 1, minWidth: 0 });
         const timeEl = document.createElement("div");
         timeEl.textContent = m.timeText;
         Object.assign(timeEl.style, { fontSize: 12.5, fontWeight: 600 });
         const subEl = document.createElement("div");
         subEl.textContent = m.sessionId ? "会话 " + String(m.sessionId).slice(0, 12) + "…" : "回合结束";
         Object.assign(subEl.style, { fontSize: 12, color: "rgba(0,0,0,0.55)", marginTop: 3 });
-        row.appendChild(timeEl);
-        row.appendChild(subEl);
+        info.appendChild(timeEl);
+        info.appendChild(subEl);
+        const del = document.createElement("button");
+        del.type = "button";
+        del.textContent = "删除";
+        Object.assign(del.style, {
+          border: "1px solid rgba(0,0,0,0.16)", background: "transparent",
+          borderRadius: 6, padding: "3px 10px", cursor: "pointer",
+          fontSize: 12, color: "rgba(0,0,0,0.62)", flexShrink: 0,
+        });
+        del.addEventListener("click", (ev) => { ev.stopPropagation(); removeRecord(m.at); });
+        row.appendChild(info);
+        row.appendChild(del);
         container.appendChild(row);
       });
     }
@@ -321,6 +353,15 @@ window.__ModuleLoader__.load({
       const titleEl = document.createElement("span");
       titleEl.textContent = "回合结束消息";
       Object.assign(titleEl.style, { fontSize: 15, fontWeight: 600 });
+      const clearBtn = document.createElement("button");
+      clearBtn.type = "button";
+      clearBtn.textContent = "全部删除";
+      Object.assign(clearBtn.style, {
+        border: "1px solid rgba(0,0,0,0.16)", background: "transparent",
+        borderRadius: 6, padding: "4px 12px", cursor: "pointer",
+        fontSize: 12.5, color: "rgba(0,0,0,0.62)",
+      });
+      clearBtn.addEventListener("click", (ev) => { ev.stopPropagation(); clearAllRecords(); });
       const closeBtn = document.createElement("button");
       closeBtn.type = "button";
       closeBtn.textContent = "×";
@@ -330,8 +371,12 @@ window.__ModuleLoader__.load({
         color: "rgba(0,0,0,0.55)",
       });
       closeBtn.addEventListener("click", (ev) => { ev.stopPropagation(); closeNotifyDrawer(); });
+      const headerActions = document.createElement("div");
+      Object.assign(headerActions.style, { display: "flex", alignItems: "center", gap: 6 });
+      headerActions.appendChild(clearBtn);
+      headerActions.appendChild(closeBtn);
       header.appendChild(titleEl);
-      header.appendChild(closeBtn);
+      header.appendChild(headerActions);
       const listEl = document.createElement("div");
       Object.assign(listEl.style, { flex: 1, overflowY: "auto", padding: "6px 0" });
       panel.appendChild(header);
