@@ -164,7 +164,7 @@ window.__ModuleLoader__.load({
       );
       return h("div", { style: wrapStyle },
         h("h2", { style: titleStyle }, "回合结束提示音"),
-        h("p", { style: introStyle }, "agent 回合结束时(转入空闲)由浏览器 JS 播放一声合成"叮"——纯前端 Web Audio,宿主不发声、不弹 Windows/系统通知。"),
+        h("p", { style: introStyle }, "agent 回合结束时(转入空闲)由浏览器 JS 播放一声合成“叮”——纯前端 Web Audio,宿主不发声、不弹 Windows/系统通知。"),
         h("div", { key: "enabled", style: rowStyle },
           h("span", { style: labelStyle }, "启用"),
           h("span", { style: controlStyle },
