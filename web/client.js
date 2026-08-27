@@ -102,7 +102,55 @@ window.__ModuleLoader__.load({
       return true;
     }
 
-    // ── 命名空间快照 → 信号检测 → 播放 ------------------------------------------
+        // ── 回合结束消息缓存(浏览器侧,localStorage 持久化) ------------------------
+    // 每次回合结束写入一条消息:{ at, timeText, sessionId }。缓存按 at 去重、上限
+    // NOTIFY_CAP 条,存 localStorage;右下角弹窗与右侧消息列表通过 subscribeNotify
+    // 订阅变更。这是纯前端数据(零后端、零系统通知),与 Web Audio 播放同源。
+    const NOTIFY_KEY = "falling-ts-web-ding.notify.v1";
+    const NOTIFY_CAP = 100;
+    let notifyCache = null; // null = 尚未加载(惰性)
+    const notifyListeners = new Set();
+
+    function loadNotifyCache() {
+      if (notifyCache !== null) return notifyCache;
+      try {
+        const raw = window.localStorage.getItem(NOTIFY_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        notifyCache = Array.isArray(arr) ? arr.filter((m) => m && typeof m.at === "number") : [];
+      } catch {
+        notifyCache = [];
+      }
+      return notifyCache;
+    }
+    function saveNotifyCache() {
+      try {
+        window.localStorage.setItem(NOTIFY_KEY, JSON.stringify(notifyCache.slice(0, NOTIFY_CAP)));
+      } catch { /* 无存储可用(private 模式等)时仅保留内存副本 */ }
+    }
+    function emitNotifyChange() {
+      notifyCache = loadNotifyCache();
+      const list = notifyCache;
+      notifyListeners.forEach((fn) => { try { fn(list); } catch {} });
+    }
+    function subscribeNotify(fn) {
+      notifyListeners.add(fn);
+      return () => notifyListeners.delete(fn);
+    }
+    /** 记录一条"回合结束"消息(同一 at 只记一次)。 */
+    function recordTurnEnd(at, sessionId) {
+      const list = loadNotifyCache();
+      if (list.some((m) => m.at === at)) return;
+      const d = new Date(at);
+      const pad = (n) => String(n).padStart(2, "0");
+      const timeText = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+        " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+      list.unshift({ at, timeText, sessionId: typeof sessionId === "string" ? sessionId : undefined });
+      if (list.length > NOTIFY_CAP) list.length = NOTIFY_CAP;
+      saveNotifyCache();
+      emitNotifyChange();
+    }
+
+// ── 命名空间快照 → 信号检测 → 播放 ------------------------------------------
     // lastAt:本页面最后响应过的 signal.at。首帧(页面加载时已存在的残留)只做
     // 基线、不播放;之后 at 严格增长的新 'done' 信号才叮一声。
     let lastAt = null;
@@ -120,6 +168,7 @@ window.__ModuleLoader__.load({
       lastAt = at;
       if (value.enabled !== false) {
         playDing({ volume: value.volume, freq: value.freq, decayMs: value.decayMs });
+        recordTurnEnd(at, typeof sig.sessionId === "string" ? sig.sessionId : undefined);
       }
     }
 
