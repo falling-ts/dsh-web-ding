@@ -136,18 +136,53 @@ window.__ModuleLoader__.load({
       notifyListeners.add(fn);
       return () => notifyListeners.delete(fn);
     }
-    /** 记录一条"回合结束"消息(同一 at 只记一次)。 */
-    function recordTurnEnd(at, sessionId) {
+    /** 记录一条"回合结束"消息(同一 at 只记一次)。title 为会话真实标题(查不到时省略)。 */
+    function recordTurnEnd(at, sessionId, title) {
       const list = loadNotifyCache();
       if (list.some((m) => m.at === at)) return;
       const d = new Date(at);
       const pad = (n) => String(n).padStart(2, "0");
       const timeText = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
         " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-      list.unshift({ at, timeText, sessionId: typeof sessionId === "string" ? sessionId : undefined });
+      list.unshift({
+        at,
+        timeText,
+        sessionId: typeof sessionId === "string" ? sessionId : undefined,
+        title: typeof title === "string" && title.trim() ? title : undefined,
+      });
       if (list.length > NOTIFY_CAP) list.length = NOTIFY_CAP;
       saveNotifyCache();
       emitNotifyChange();
+    }
+    /**
+     * 通过 session.list 查询会话的真实标题(projections.values.title)。
+     * 信号里只有 sessionId,标题不在事件负载中;失败或未找到时返回
+     * undefined,调用方回退到无标题展示。
+     * @param {string|undefined} sessionId
+     * @returns {Promise<string|undefined>}
+     */
+    async function fetchSessionTitle(sessionId) {
+      if (!sessionId) return undefined;
+      try {
+        const res = await fetch(location.origin + "/api/session.list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "client-request",
+            rpcId: (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now())),
+            method: "session.list",
+            payload: {},
+          }),
+        });
+        const json = await res.json();
+        const result = json && json.result;
+        const items = result && result.ok && Array.isArray(result.value && result.value.items) ? result.value.items : [];
+        const row = items.find((it) => it && it.sessionId === sessionId);
+        const title = row && row.projections && row.projections.values && row.projections.values.title;
+        return typeof title === "string" && title.trim() ? title : undefined;
+      } catch {
+        return undefined;
+      }
     }
     /** 删除单条"回合结束"消息(按 at 匹配)。 */
     function removeRecord(at) {
@@ -240,10 +275,10 @@ window.__ModuleLoader__.load({
       head.appendChild(title);
       head.appendChild(closeBtn);
       const text = document.createElement("div");
-      text.textContent = "agent 已完成回合——浏览器播放一声“叮”。";
+      text.textContent = msg.title ? msg.title + " 已完成" : "agent 已完成回合——浏览器播放一声“叮”。";
       Object.assign(text.style, { marginTop: 10, lineHeight: 1.65, color: "rgba(0,0,0,0.66)" });
       const foot = document.createElement("div");
-      foot.textContent = timeText + (msg.sessionId ? "  ·  " + String(msg.sessionId).slice(0, 12) + "…" : "");
+      foot.textContent = timeText;
       Object.assign(foot.style, { marginTop: 12, fontSize: 12, color: "rgba(0,0,0,0.48)" });
       body.appendChild(head);
       body.appendChild(text);
@@ -308,7 +343,7 @@ window.__ModuleLoader__.load({
         timeEl.textContent = m.timeText;
         Object.assign(timeEl.style, { fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" });
         const subEl = document.createElement("div");
-        subEl.textContent = m.sessionId ? "会话 " + String(m.sessionId).slice(0, 12) + "…" : "回合结束";
+        subEl.textContent = m.title ? m.title + " 已完成" : (m.sessionId ? "会话 " + String(m.sessionId).slice(0, 12) + "…" : "回合结束");
         Object.assign(subEl.style, { fontSize: 12.5, color: "rgba(0,0,0,0.5)", marginTop: 4 });
         info.appendChild(timeEl);
         info.appendChild(subEl);
@@ -435,9 +470,14 @@ window.__ModuleLoader__.load({
       lastAt = at;
       if (value.enabled !== false) {
         playDing({ volume: value.volume, freq: value.freq, decayMs: value.decayMs });
-        const msg = { at, sessionId: typeof sig.sessionId === "string" ? sig.sessionId : undefined };
-        recordTurnEnd(at, msg.sessionId);
-        showTurnEndToast(msg);
+        const sessionId = typeof sig.sessionId === "string" ? sig.sessionId : undefined;
+        // 信号里只有 sessionId:异步查一次真实标题再落缓存与弹 toast。
+        void (async () => {
+          const title = await fetchSessionTitle(sessionId);
+          const msg = { at, sessionId, title };
+          recordTurnEnd(at, sessionId, title);
+          showTurnEndToast(msg);
+        })();
       }
     }
 
