@@ -61,6 +61,16 @@ See `AGENTS.md` for the plugin's own rules (pure Host listener, no backend
 audio, no OS notification, only sanctioned settings-mirror channel to the
 browser).
 
+## Screenshots
+
+![Browser tab: the ding is played entirely by front-end JS (Web Audio API)](assets/agent-finish-ding.png)
+
+*Agent round finishes: the browser client mirrors the `done` signal and
+synthesizes a short "ding" through the tab; no backend audio, no OS
+notification.*
+
+---
+
 ## License
 
 MIT

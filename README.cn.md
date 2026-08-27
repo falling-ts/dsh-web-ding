@@ -56,6 +56,15 @@ dsh plugin --profile web add /path/to/dsh-web-ding
 插件自身规则见 `AGENTS.md`(纯 Host 监听器、后端不发声、不弹系统通知、只用
 官方 settings 镜像通道通向浏览器)。
 
+## 效果截图
+
+![浏览器标签页——"叮"完全由前端 JS(Web Audio API)合成播放](assets/agent-finish-ding.png)
+
+*agent 回合结束——浏览器端镜像到 `done` 信号后在标签页里合成一声短"叮";
+不经过后端发声,也不弹系统通知。*
+
+---
+
 ## License
 
 MIT
