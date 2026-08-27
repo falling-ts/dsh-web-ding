@@ -1,0 +1,12 @@
+# Opt-in layer: mount the dsh-web-ding function plugin over the
+# current composition without changing shipped defaults.
+#
+#   dsh plugin --profile web add github:falling-ts/dsh-web-ding   # install
+#
+# The Host half is a pure listener on agent/status; it pushes a "agent
+# finished" signal into the falling-ts-web-ding settings namespace, which the
+# browser client half mirrors and answers with a Web-Audio "ding".
+
+- insert:
+    - id: web-ding
+      name: '@falling-ts/dsh-web-ding'
