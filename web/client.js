@@ -175,18 +175,18 @@ window.__ModuleLoader__.load({
       if (toastLayer && document.body.contains(toastLayer)) return toastLayer;
       toastLayer = document.createElement("div");
       Object.assign(toastLayer.style, {
-        position: "fixed", right: "16px", bottom: "16px", zIndex: 2147483000,
-        display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "10px",
+        position: "fixed", right: "20px", bottom: "20px", zIndex: 2147483000,
+        display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "12px",
         pointerEvents: "none",
       });
       document.body.appendChild(toastLayer);
       return toastLayer;
     }
     function dismissToast(el) {
-      el.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+      el.style.transition = "opacity 0.22s ease, transform 0.28s cubic-bezier(0.16, 1, 0.3, 1)";
       el.style.opacity = "0";
-      el.style.transform = "translateX(24px)";
-      window.setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 260);
+      el.style.transform = "translateX(28px) scale(0.97)";
+      window.setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
     }
     function showTurnEndToast(msg) {
       const layer = ensureToastLayer();
@@ -197,14 +197,15 @@ window.__ModuleLoader__.load({
           " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()));
       const el = document.createElement("div");
       Object.assign(el.style, {
-        pointerEvents: "auto", position: "relative", width: 340, minHeight: 84,
-        background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px) saturate(1.4)",
-        WebkitBackdropFilter: "blur(18px) saturate(1.4)",
-        border: "1px solid rgba(0,0,0,0.10)", borderRadius: 10,
-        boxShadow: "0 8px 28px rgba(0,0,0,0.18)", overflow: "hidden",
+        pointerEvents: "auto", position: "relative", width: 360, minHeight: 88,
+        background: "rgba(255,255,255,0.88)", backdropFilter: "blur(20px) saturate(1.5)",
+        WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+        border: "1px solid rgba(0,0,0,0.05)", borderRadius: 16,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 6px 16px rgba(0,0,0,0.08), 0 20px 48px rgba(0,0,0,0.14)",
+        overflow: "hidden",
         display: "flex", alignItems: "stretch", cursor: "pointer",
-        opacity: "0", transform: "translateX(24px)",
-        transition: "opacity 0.25s ease, transform 0.25s ease",
+        opacity: "0", transform: "translateX(28px) scale(0.97)",
+        transition: "opacity 0.22s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif",
         color: "#1f1f1f", fontSize: 13,
       });
@@ -213,23 +214,23 @@ window.__ModuleLoader__.load({
         width: 4, flexShrink: 0, background: "#0078d4",
       });
       const body = document.createElement("div");
-      Object.assign(body.style, { padding: "12px 14px 14px", minWidth: 0 });
+      Object.assign(body.style, { padding: "17px 18px 16px", minWidth: 0 });
       const head = document.createElement("div");
       Object.assign(head.style, {
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
       });
       const title = document.createElement("span");
       title.textContent = "回合结束";
-      Object.assign(title.style, { fontSize: 13.5, fontWeight: 600 });
+      Object.assign(title.style, { fontSize: 14, fontWeight: 600, letterSpacing: 0.2 });
       const closeBtn = document.createElement("button");
       closeBtn.type = "button";
       closeBtn.textContent = "×";
       Object.assign(closeBtn.style, {
         border: "none", background: "transparent", cursor: "pointer",
-        fontSize: 16, lineHeight: 1, padding: "2px 6px", borderRadius: 6,
-        color: "rgba(0,0,0,0.55)",
+        fontSize: 17, lineHeight: 1, padding: "4px 8px", borderRadius: 8,
+        color: "rgba(0,0,0,0.55)", transition: "background 0.15s ease",
       });
-      closeBtn.addEventListener("mouseenter", () => { closeBtn.style.background = "rgba(0,0,0,0.08)"; });
+      closeBtn.addEventListener("mouseenter", () => { closeBtn.style.background = "rgba(0,0,0,0.06)"; });
       closeBtn.addEventListener("mouseleave", () => { closeBtn.style.background = "transparent"; });
       closeBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -240,10 +241,10 @@ window.__ModuleLoader__.load({
       head.appendChild(closeBtn);
       const text = document.createElement("div");
       text.textContent = "agent 已完成回合——浏览器播放一声“叮”。";
-      Object.assign(text.style, { marginTop: 6, lineHeight: 1.5, color: "rgba(0,0,0,0.62)" });
+      Object.assign(text.style, { marginTop: 10, lineHeight: 1.65, color: "rgba(0,0,0,0.66)" });
       const foot = document.createElement("div");
       foot.textContent = timeText + (msg.sessionId ? "  ·  " + String(msg.sessionId).slice(0, 12) + "…" : "");
-      Object.assign(foot.style, { marginTop: 8, fontSize: 11.5, color: "rgba(0,0,0,0.42)" });
+      Object.assign(foot.style, { marginTop: 12, fontSize: 12, color: "rgba(0,0,0,0.48)" });
       body.appendChild(head);
       body.appendChild(text);
       body.appendChild(foot);
@@ -252,7 +253,7 @@ window.__ModuleLoader__.load({
       layer.appendChild(el);
       void el.offsetHeight; // force reflow → 触发进入动画
       el.style.opacity = "1";
-      el.style.transform = "translateX(0)";
+      el.style.transform = "translateX(0) scale(1)";
       el._timer = window.setTimeout(() => dismissToast(el), 6000);
       el.addEventListener("click", () => {
         window.clearTimeout(el._timer);
@@ -276,7 +277,7 @@ window.__ModuleLoader__.load({
       window.setTimeout(() => {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
         if (drawerHost === overlay) drawerHost = null;
-      }, 240);
+      }, 300);
     }
     function renderDrawerList(container) {
       container.textContent = "";
@@ -285,8 +286,8 @@ window.__ModuleLoader__.load({
         const empty = document.createElement("div");
         empty.textContent = "暂无回合结束消息";
         Object.assign(empty.style, {
-          padding: "40px 16px", textAlign: "center",
-          color: "rgba(0,0,0,0.40)", fontSize: 13,
+          padding: "56px 20px", textAlign: "center",
+          color: "rgba(0,0,0,0.42)", fontSize: 13, lineHeight: 1.6,
         });
         container.appendChild(empty);
         return;
@@ -294,26 +295,39 @@ window.__ModuleLoader__.load({
       list.forEach((m) => {
         const row = document.createElement("div");
         Object.assign(row.style, {
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "12px 16px", borderBottom: "1px solid rgba(0,0,0,0.07)",
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "14px 16px", borderRadius: 12,
+          marginBottom: 6, cursor: "default",
+          background: "rgba(0,0,0,0)", transition: "background 0.16s ease",
         });
+        row.addEventListener("mouseenter", () => { row.style.background = "rgba(0,0,0,0.045)"; });
+        row.addEventListener("mouseleave", () => { row.style.background = "rgba(0,0,0,0)"; });
         const info = document.createElement("div");
         Object.assign(info.style, { flex: 1, minWidth: 0 });
         const timeEl = document.createElement("div");
         timeEl.textContent = m.timeText;
-        Object.assign(timeEl.style, { fontSize: 12.5, fontWeight: 600 });
+        Object.assign(timeEl.style, { fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" });
         const subEl = document.createElement("div");
         subEl.textContent = m.sessionId ? "会话 " + String(m.sessionId).slice(0, 12) + "…" : "回合结束";
-        Object.assign(subEl.style, { fontSize: 12, color: "rgba(0,0,0,0.55)", marginTop: 3 });
+        Object.assign(subEl.style, { fontSize: 12.5, color: "rgba(0,0,0,0.5)", marginTop: 4 });
         info.appendChild(timeEl);
         info.appendChild(subEl);
         const del = document.createElement("button");
         del.type = "button";
         del.textContent = "删除";
         Object.assign(del.style, {
-          border: "1px solid rgba(0,0,0,0.16)", background: "transparent",
-          borderRadius: 6, padding: "3px 10px", cursor: "pointer",
-          fontSize: 12, color: "rgba(0,0,0,0.62)", flexShrink: 0,
+          border: "1px solid rgba(0,0,0,0.14)", background: "transparent",
+          borderRadius: 8, padding: "5px 12px", cursor: "pointer",
+          fontSize: 12.5, color: "rgba(0,0,0,0.6)", flexShrink: 0,
+          transition: "background 0.16s ease, border-color 0.16s ease",
+        });
+        del.addEventListener("mouseenter", () => {
+          del.style.background = "rgba(0,0,0,0.06)";
+          del.style.borderColor = "rgba(0,0,0,0.26)";
+        });
+        del.addEventListener("mouseleave", () => {
+          del.style.background = "transparent";
+          del.style.borderColor = "rgba(0,0,0,0.14)";
         });
         del.addEventListener("click", (ev) => { ev.stopPropagation(); removeRecord(m.at); });
         row.appendChild(info);
@@ -326,20 +340,20 @@ window.__ModuleLoader__.load({
       const overlay = document.createElement("div");
       Object.assign(overlay.style, {
         position: "fixed", inset: 0, zIndex: 2147483001,
-        background: "rgba(0,0,0,0.28)",
+        background: "rgba(0,0,0,0.36)",
         pointerEvents: "auto", opacity: 0,
         transition: "opacity 0.2s ease",
       });
       overlay.addEventListener("click", closeNotifyDrawer);
       const panel = document.createElement("div");
       Object.assign(panel.style, {
-        position: "absolute", top: 0, right: 0, height: "100%", width: 380, maxWidth: "92vw",
-        background: "rgba(250,250,250,0.96)",
-        backdropFilter: "blur(20px) saturate(1.3)",
-        WebkitBackdropFilter: "blur(20px) saturate(1.3)",
-        boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
+        position: "absolute", top: 0, right: 0, height: "100%", width: 400, maxWidth: "94vw",
+        background: "rgba(255,255,255,0.94)",
+        backdropFilter: "blur(24px) saturate(1.5)",
+        WebkitBackdropFilter: "blur(24px) saturate(1.5)",
+        boxShadow: "-2px 0 6px rgba(0,0,0,0.04), -10px 0 32px rgba(0,0,0,0.10), -32px 0 80px rgba(0,0,0,0.12)",
         transform: "translateX(100%)",
-        transition: "transform 0.22s ease",
+        transition: "transform 0.26s cubic-bezier(0.16, 1, 0.3, 1)",
         display: "flex", flexDirection: "column",
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif",
         color: "#1f1f1f",
@@ -347,19 +361,28 @@ window.__ModuleLoader__.load({
       const header = document.createElement("div");
       Object.assign(header.style, {
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "14px 16px", borderBottom: "1px solid rgba(0,0,0,0.08)",
+        padding: "18px 20px 16px", borderBottom: "1px solid rgba(0,0,0,0.07)",
         flexShrink: 0,
       });
       const titleEl = document.createElement("span");
       titleEl.textContent = "回合结束消息";
-      Object.assign(titleEl.style, { fontSize: 15, fontWeight: 600 });
+      Object.assign(titleEl.style, { fontSize: 16, fontWeight: 700, letterSpacing: 0.2 });
       const clearBtn = document.createElement("button");
       clearBtn.type = "button";
       clearBtn.textContent = "全部删除";
       Object.assign(clearBtn.style, {
-        border: "1px solid rgba(0,0,0,0.16)", background: "transparent",
-        borderRadius: 6, padding: "4px 12px", cursor: "pointer",
-        fontSize: 12.5, color: "rgba(0,0,0,0.62)",
+        border: "1px solid rgba(0,0,0,0.14)", background: "transparent",
+        borderRadius: 8, padding: "5px 12px", cursor: "pointer",
+        fontSize: 12.5, color: "rgba(0,0,0,0.6)",
+        transition: "background 0.16s ease, border-color 0.16s ease",
+      });
+      clearBtn.addEventListener("mouseenter", () => {
+        clearBtn.style.background = "rgba(0,0,0,0.06)";
+        clearBtn.style.borderColor = "rgba(0,0,0,0.26)";
+      });
+      clearBtn.addEventListener("mouseleave", () => {
+        clearBtn.style.background = "transparent";
+        clearBtn.style.borderColor = "rgba(0,0,0,0.14)";
       });
       clearBtn.addEventListener("click", (ev) => { ev.stopPropagation(); clearAllRecords(); });
       const closeBtn = document.createElement("button");
@@ -367,18 +390,20 @@ window.__ModuleLoader__.load({
       closeBtn.textContent = "×";
       Object.assign(closeBtn.style, {
         border: "none", background: "transparent", cursor: "pointer",
-        fontSize: 18, lineHeight: 1, padding: "2px 8px", borderRadius: 6,
-        color: "rgba(0,0,0,0.55)",
+        fontSize: 19, lineHeight: 1, padding: "4px 9px", borderRadius: 8,
+        color: "rgba(0,0,0,0.55)", transition: "background 0.15s ease",
       });
+      closeBtn.addEventListener("mouseenter", () => { closeBtn.style.background = "rgba(0,0,0,0.06)"; });
+      closeBtn.addEventListener("mouseleave", () => { closeBtn.style.background = "transparent"; });
       closeBtn.addEventListener("click", (ev) => { ev.stopPropagation(); closeNotifyDrawer(); });
       const headerActions = document.createElement("div");
-      Object.assign(headerActions.style, { display: "flex", alignItems: "center", gap: 6 });
+      Object.assign(headerActions.style, { display: "flex", alignItems: "center", gap: 8 });
       headerActions.appendChild(clearBtn);
       headerActions.appendChild(closeBtn);
       header.appendChild(titleEl);
       header.appendChild(headerActions);
       const listEl = document.createElement("div");
-      Object.assign(listEl.style, { flex: 1, overflowY: "auto", padding: "6px 0" });
+      Object.assign(listEl.style, { flex: 1, overflowY: "auto", padding: "10px 12px 14px" });
       panel.appendChild(header);
       panel.appendChild(listEl);
       overlay.appendChild(panel);
