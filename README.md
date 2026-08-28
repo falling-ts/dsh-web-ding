@@ -28,14 +28,31 @@ Requires the web app to ship the client bundle (the `dsh.client` declaration in
 
 ## Configuration (`falling-ts-web-ding` namespace, $DSH_HOME/settings.yaml)
 
+Two independent blocks, each with its own switch and its own tone:
+
+**Block 1 — 弹出用户选择 (question popup ding)** — plays when the harness pops a
+user-question chooser in the browser. Detection is client-side on the DOM
+(`[data-question-key]` anchor of the QuestionComposer): the Host half sees no
+question frame, so this block is entirely browser-side.
+
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
-| `enabled` | boolean | `true` | Master switch (Host skips publishing when off). |
-| `volume` | number 0..1 | `0.7` | Web Audio playback gain. |
-| `freq` | number 80..4000 | `880` | Fundamental frequency of the ding (Hz). |
-| `decayMs` | number 100..4000 | `900` | Tone decay length (ms). |
+| `questionEnabled` | boolean | `true` | Switch for the question-popup ding. |
+| `questionVolume` | number 0..1 | `0.7` | Web Audio playback gain. |
+| `questionFreq` | number 80..4000 | `880` | Fundamental frequency of the ding (Hz). |
+| `questionDecayMs` | number 100..4000 | `900` | Tone decay length (ms). |
 
-Every session's agent turn end (transition to idle) rings; repeated idle ticks of an already-idle session and brand-new sessions that never ran stay silent.
+**Block 2 — 回合结束 (turn-end ding)** — the classic agent/status idle-transition
+tone. The Host observes `agent/status`; on the idle transition (all turns done,
+including sub-agents, before the next human turn; fresh sessions that never ran
+and repeated idle ticks stay silent) it publishes the `done` signal.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `turnEndEnabled` | boolean | `true` | Switch for the turn-end ding (Host skips publishing when off). |
+| `turnEndVolume` | number 0..1 | `0.7` | Web Audio playback gain. |
+| `turnEndFreq` | number 80..4000 | `880` | Fundamental frequency of the ding (Hz). |
+| `turnEndDecayMs` | number 100..4000 | `900` | Tone decay length (ms). |
 
 Besides the ring, each turn end drops a bottom-right toast (Win11-style,
 auto-dismisses after 6 s). Click it to open the right-side notification
@@ -44,8 +61,8 @@ drawer: the last 100 turn-end messages are kept in the browser's
 deleted individually, and a "全部删除" button clears them all. The message
 log is front-end only — the Host never reads or writes it.
 
-You can also adjust these from the **设置 → 回合结束提示音** panel, which
-includes a "试听" (preview) button.
+You can also adjust both blocks from the **设置 → 提示音配置** panel,
+each with its own switch and its own "试听" (preview) button.
 
 ## Browser autoplay policy
 
@@ -70,11 +87,12 @@ browser).
 
 ## Screenshots
 
-![Settings page: the **ding** (回合结束提示音) section, live-editable controls](assets/setting-ding.png)
+![Settings page: the **提示音配置** section, two blocks each with its own switch and tone](assets/setting-ding.png)
 
-*Settings page: the **回合结束提示音** section. Master switch, volume,
-frequency and decay length are all live-editable without a restart, with a
-**试听** (preview) button to warm the browser AudioContext.*
+*Settings page: the **提示音配置** section — "弹出用户选择" and "回合结束" blocks,
+each with its own switch, volume, frequency and decay length, all live-editable
+without a restart, each with a **试听** (preview) button to warm the browser
+AudioContext.*
 
 ---
 

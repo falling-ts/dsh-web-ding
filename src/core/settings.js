@@ -1,20 +1,22 @@
 /**
- * dsh-web-ding settings — the "回合结束提示音" (turn-end ding) surface.
+ * dsh-web-ding settings — the "提示音" (ding) surface, split into TWO blocks:
  *
- * User-tunable parameters are registered under the `falling-ts-web-ding`
- * settings namespace (the `falling-ts-` prefix prevents collisions with
- * other plugins' keys):
+ * Block 1 — 弹出用户选择 (question popup ding): plays when the harness pops a
+ *   user-question chooser in the browser (detected client-side on the DOM
+ *   `[data-question-key]` anchor — the host half sees no question frame).
+ *   `questionEnabled` (boolean, default `true`) is its master switch; when
+ *   `false` the browser skips the question-popup ding.
+ *   `questionVolume` / `questionFreq` / `questionDecayMs` tune its tone.
  *
- * - `enabled`  (boolean, default `true`): master switch. When `false` the
- *   Host half still observes `agent/status` but skips publishing the signal,
- *   so the browser never hears a ding.
- * - `volume`   (number 0..1, default `0.7`): playback gain applied by the
- *   browser client's Web Audio synth (a per-oscillator peak, not the master).
- * - `freq`     (number 80..4000, default `880`): fundamental frequency of
- *   the synthesized "ding" in Hz. The client stacks a soft higher-octave and
- *   a faint bell partial on top automatically.
- * - `decayMs`  (number 100..4000, default `900`): exponential-decay length
- *   of the tone in milliseconds.
+ * Block 2 — 回合结束 (turn-end ding): the classic agent/status idle-transition
+ *   tone. `turnEndEnabled` (boolean, default `true`) is its master switch;
+ *   when `false` the Host half still observes `agent/status` but skips
+ *   publishing the signal, so the browser never hears a turn-end ding.
+ *   `turnEndVolume` / `turnEndFreq` / `turnEndDecayMs` tune its tone.
+ *
+ * Per-block fields are mirrored (the same `volume` 0..1 / `freq` 80..4000 /
+ * `decayMs` 100..4000 meanings as the original single block), so the two
+ * dings can carry distinct pitches and loudness.
  *
  * The `signal` field is the PLUGIN-PRIVATE host→browser messenger (the same
  * pattern dsh-force-compact uses for its `liveUi` field): the Host half is
@@ -31,12 +33,18 @@ export const NS = 'falling-ts-web-ding'
 /** The settings field carrying the host→browser turn-end signal. */
 export const SIGNAL_FIELD = 'signal'
 
-/** Defaults — also the base passed to settings.register. */
+/** Defaults — also the base passed to settings.register. Two blocks, each with its own switch and tone. */
 export const DEFAULTS = Object.freeze({
-  enabled: true,
-  volume: 0.7,
-  freq: 880,
-  decayMs: 900,
+  // Block 1 — 弹出用户选择 (question popup ding), detected client-side on the DOM.
+  questionEnabled: true,
+  questionVolume: 0.7,
+  questionFreq: 880,
+  questionDecayMs: 900,
+  // Block 2 — 回合结束 (turn-end ding), Host agent/status idle transition.
+  turnEndEnabled: true,
+  turnEndVolume: 0.7,
+  turnEndFreq: 880,
+  turnEndDecayMs: 900,
 })
 
 /**
@@ -104,10 +112,16 @@ export async function buildSchema() {
     const z = await resolveZ()
     if (z === undefined) return null
     return z.object({
-      enabled: z.boolean().default(DEFAULTS.enabled),
-      volume: z.number().default(DEFAULTS.volume),
-      freq: z.number().default(DEFAULTS.freq),
-      decayMs: z.number().default(DEFAULTS.decayMs),
+      // Block 1 — 弹出用户选择 (question popup ding), client-side DOM detection.
+      questionEnabled: z.boolean().default(DEFAULTS.questionEnabled),
+      questionVolume: z.number().default(DEFAULTS.questionVolume),
+      questionFreq: z.number().default(DEFAULTS.questionFreq),
+      questionDecayMs: z.number().default(DEFAULTS.questionDecayMs),
+      // Block 2 — 回合结束 (turn-end ding), Host agent/status idle transition.
+      turnEndEnabled: z.boolean().default(DEFAULTS.turnEndEnabled),
+      turnEndVolume: z.number().default(DEFAULTS.turnEndVolume),
+      turnEndFreq: z.number().default(DEFAULTS.turnEndFreq),
+      turnEndDecayMs: z.number().default(DEFAULTS.turnEndDecayMs),
       // TRANSIENT host→browser messenger (src/core/signal.js): host-written
       // { phase:'done', at, sessionId }. z.any() because the vendored
       // schemastery exposes only object/any/string/number/boolean/array.

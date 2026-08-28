@@ -28,16 +28,29 @@ dsh plugin --profile web add github:falling-ts/dsh-web-ding
 
 ## 配置(`falling-ts-web-ding` 命名空间,$DSH_HOME/settings.yaml)
 
+两块独立配置,各自有开关与音色:
+
+**块 1 — 弹出用户选择** —— harness 弹出用户选择题时在浏览器播放一声"叮"。
+检测在浏览器侧完成(DOM 上 QuestionComposer 的 `[data-question-key]` 锚点):
+宿主看不到 question 帧,故本块完全由前端实现。
+
 | 字段 | 类型 | 默认 | 含义 |
 |------|------|------|------|
-| `enabled` | boolean | `true` | 总开关(关闭时 Host 跳过发布)。 |
-| `volume` | number 0..1 | `0.7` | Web Audio 播放音量。 |
-| `freq` | number 80..4000 | `880` | "叮"的基频(Hz)。 |
-| `decayMs` | number 100..4000 | `900` | 音色衰减时长(ms)。 |
+| `questionEnabled` | boolean | `true` | 弹出用户选择提示音开关。 |
+| `questionVolume` | number 0..1 | `0.7` | Web Audio 播放音量。 |
+| `questionFreq` | number 80..4000 | `880` | "叮"的基频(Hz)。 |
+| `questionDecayMs` | number 100..4000 | `900` | 音色衰减时长(ms)。 |
 
-也可以在 **设置 → 回合结束提示音** 面板里调整,面板带"试听"按钮。
+**块 2 — 回合结束** —— 经典的 agent/status idle 转变提示音。Host 观察
+`agent/status`,在 idle 转变(全部轮次与子代理结束、下一次人为对话之前;
+新建后从未运行过的会话与重复 idle tick 保持静默)时发布 `done` 信号。
 
-任何会话的 agent 回合结束(转入空闲)都会提示;同一会话内重复 idle tick 与新建后从未运行过的会话保持静默。
+| 字段 | 类型 | 默认 | 含义 |
+|------|------|------|------|
+| `turnEndEnabled` | boolean | `true` | 回合结束提示音开关(关闭时 Host 跳过发布)。 |
+| `turnEndVolume` | number 0..1 | `0.7` | Web Audio 播放音量。 |
+| `turnEndFreq` | number 80..4000 | `880` | "叮"的基频(Hz)。 |
+| `turnEndDecayMs` | number 100..4000 | `900` | 音色衰减时长(ms)。 |
 
 ## 浏览器自动播放策略
 
@@ -60,10 +73,11 @@ dsh plugin --profile web add /path/to/dsh-web-ding
 
 ## 效果截图
 
-![设置页——「回合结束提示音」分区,各旋钮免重启实时可调](assets/setting-ding.png)
+![设置页——「提示音配置」分区,两块各自开关与音色,免重启实时可调](assets/setting-ding.png)
 
-*设置页——「回合结束提示音」分区:总开关、音量、频率、衰减时长全部免重启
-实时可调,并带"试听"按钮预热浏览器 AudioContext。*
+*设置页——「提示音配置」分区:「弹出用户选择」与「回合结束」两块,各自
+开关、音量、频率、衰减时长,免重启实时可调,各带"试听"按钮预热浏览器
+AudioContext。*
 
 ---
 

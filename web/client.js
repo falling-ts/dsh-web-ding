@@ -1,5 +1,6 @@
 /**
- * dsh-web-ding 浏览器半部:回合结束提示音(设置分区 + Web Audio 播放器)。
+ * dsh-web-ding 浏览器半部:提示音配置(设置分区 + Web Audio 播放器,两块:弹出
+ * 用户选择 / 回合结束)。
  *
  * 这是一个闭包工厂 artifact:window.__ModuleLoader__.load({ id, factory }),
  * factory(require) 通过注入的 require 解析外部模块(react、client-runtime),
@@ -15,8 +16,10 @@
  *      基线不播放,重启残留/重复快照都不会重复响)后,用 Web Audio API 合成
  *      一声"叮"。声音 100% 由浏览器 JS 生成——宿主 Node 端从不发声,也不发
  *      Windows/系统通知。
- *   3. 注册 settings.section "回合结束提示音" 分区:开关、音量、音色频率、
- *      时长与"试听"按钮(点击试听同时完成音频解锁)。
+ *   3. 注册 settings.section "提示音配置" 分区:两块(弹出用户选择 / 回合结束),
+ *      每块都有开关、音量、音色频率、时长与"试听"按钮(点击试听同时完成音频解锁)。
+ *      滑块用 BufferedSlider 本地缓冲——拖动只刷本地 state,松手/失焦才提交,
+ *      避免每次拖动写盘 + 广播 + 整块面板重渲染导致卡顿。
  *
  * 浏览器自动播放策略:AudioContext 需要一次用户手势才能出声。首次
  * pointerdown/keydown 做一次性预热(创建并 resume),"试听"按钮点击本身
@@ -468,8 +471,8 @@ window.__ModuleLoader__.load({
       }
       if (!(at > lastAt)) return;
       lastAt = at;
-      if (value.enabled !== false) {
-        playDing({ volume: value.volume, freq: value.freq, decayMs: value.decayMs });
+      if (value.turnEndEnabled !== false) {
+        playDing({ volume: value.turnEndVolume, freq: value.turnEndFreq, decayMs: value.turnEndDecayMs });
         const sessionId = typeof sig.sessionId === "string" ? sig.sessionId : undefined;
         // 信号里只有 sessionId:异步查一次真实标题再落缓存与弹 toast。
         void (async () => {
@@ -479,6 +482,44 @@ window.__ModuleLoader__.load({
           showTurnEndToast(msg);
         })();
       }
+    }
+
+    // ── 弹出用户选择检测(DOM 锚点 [data-question-key],纯前端)────────────────────
+    // harness 的用户选择题(ask_user_question)在对话区由 QuestionComposer 渲染,根
+    // 节点带稳定的 data-question-key 属性(CSS Modules 类名是哈希的,不可用——与
+    // TurnStatus 用 role/aria 识别同思路)。宿主半部看不到 question/requested 帧
+    // (那走 connection 层 MuxFrame,Host 插件不可订阅),所以这一块完全在浏览器侧
+    // 完成:MutationObserver 观察新出现的 [data-question-key] 节点,首次出现即播
+    // 放 Block 1(弹出用户选择)的那声"叮"。非 timer、无持久态,同 lastAt 首帧
+    // 基线语义:加载时已存在的 key 只记不响,之后新弹出的 key 才响。
+    let seenQuestionKeys = new Set();   // 已响应过的 question key(去重,防重复响)
+    let questionObserver = null;        // DOM 观察器(非 timer)
+    let questionValueRef = null;        // 最新快照引用,供 observer 回调读取
+    function maybePlayQuestionFromDom(value) {
+      if (typeof document === "undefined") return;
+      const nodes = document.querySelectorAll('[data-question-key]');
+      if (nodes.length === 0) return;
+      const v = (value && typeof value === "object") ? value : {};
+      const enabled = v.questionEnabled !== false;
+      for (const el of nodes) {
+        const key = el.getAttribute("data-question-key");
+        if (!key || seenQuestionKeys.has(key)) continue;
+        seenQuestionKeys.add(key);
+        if (enabled) {
+          playDing({ volume: v.questionVolume, freq: v.questionFreq, decayMs: v.questionDecayMs });
+        }
+      }
+    }
+    function installQuestionObserver(value) {
+      if (questionObserver || typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+      // 基线:先记下当前已存在的 key(不响),之后新 key 才响(同 lastAt 首帧语义)。
+      const nodes = document.querySelectorAll('[data-question-key]');
+      for (const el of nodes) {
+        const key = el.getAttribute("data-question-key");
+        if (key) seenQuestionKeys.add(key);
+      }
+      questionObserver = new MutationObserver(() => maybePlayQuestionFromDom(questionValueRef));
+      questionObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     // ── 设置分区 UI --------------------------------------------------------------
@@ -497,6 +538,44 @@ window.__ModuleLoader__.load({
     const buttonStyle = { padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.22)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 500 };
     const inputRangeStyle = { flex: 1, minWidth: 140 };
 
+    /**
+     * 缓冲滑块(React state 本地缓冲,最流畅):拖动期间 onChange 只更新本地 state
+     * (仅重渲染这一个 input + 显示值,不写设置、不触发 document-updated 广播),
+     * 松手(mouseup/touchend)/失焦(blur)/键盘结束(keyup)时才提交一次 scope.set。
+     * 原实现 onChange 每动一格都 update → settings.yaml 写盘 + 全量广播 + 整块面板
+     * 重渲染,所以拖动卡。
+     * @param {{fieldKey:string, labelText:string, min:number, max:number, step:number,
+     *   value:number, disabled:boolean, display:(n:number)=>string, onSubmit:(n:number)=>void}} props
+     */
+    function BufferedSlider(props) {
+      const [v, setV] = React.useState(Number.isFinite(Number(props.value)) ? Number(props.value) : 0);
+      // 外部值变化(另一标签/外部编辑)时同步进本地缓冲。拖动中 onChange 只 setV
+      // 不写盘,props.value 不变,此 effect 不会打断拖动;提交后值已一致,幂等。
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      React.useEffect(() => { setV(Number.isFinite(Number(props.value)) ? Number(props.value) : 0); }, [props.value]);
+      const commit = () => props.onSubmit(v);
+      return h("div", { style: rowStyle },
+        h("span", { style: labelStyle }, props.labelText),
+        h("span", { style: controlStyle },
+          h("input", {
+            type: "range",
+            min: props.min, max: props.max, step: props.step,
+            value: v,
+            disabled: props.disabled,
+            style: inputRangeStyle,
+            // 拖动中:只更新本地 state(不写盘)。React 对 range 的 onChange 即 input
+            // 事件,随拖动连续触发——现在每次只是 setState,不重渲染整块面板。
+            onChange: (ev) => setV(Number(ev.target.value)),
+            // 松手 / 失焦 / 键盘操作结束时才提交一次。
+            onMouseUp: commit,
+            onTouchEnd: commit,
+            onBlur: commit,
+            onKeyUp: commit,
+          }),
+          h("span", { style: valueStyle }, props.display(v))),
+      );
+    }
+
     function DingSection(props) {
       // The renderer binds the injected hooks compartment ('ding' key) into a
       // use<Name> hook; the store is the bare observable, so a selector reads
@@ -507,56 +586,57 @@ window.__ModuleLoader__.load({
       const ph = hintStyle;
       if (snap.status === "unavailable") {
         return h("div", { style: wrapStyle },
-          h("h2", { style: titleStyle }, "回合结束提示音"),
+          h("h2", { style: titleStyle }, "提示音配置"),
           h("p", { style: ph }, "设置不可用(宿主端未注册 falling-ts-web-ding 命名空间)。"));
       }
       if (snap.status === "loading" || value === undefined) {
         return h("div", { style: wrapStyle },
-          h("h2", { style: titleStyle }, "回合结束提示音"),
+          h("h2", { style: titleStyle }, "提示音配置"),
           h("p", { style: ph }, "加载中…"));
       }
       const disabled = !snap.writable;
       const v = (value && typeof value === "object") ? value : {};
       const pct = (n) => Math.round((Number(n) || 0) * 100) + "%";
-      const sliderRow = (labelText, props2, display) => h("div", { key: labelText, style: rowStyle },
-        h("span", { style: labelStyle }, labelText),
-        h("span", { style: controlStyle },
-          h("input", { type: "range", disabled: disabled, style: inputRangeStyle, ...props2 }),
-          h("span", { style: valueStyle }, display)),
-      );
+      // 两块配置,共用模板:第一块"弹出用户选择"(question),第二块"回合结束"(turnEnd)。
+      const block = (blk, title, desc, previewBtn) => {
+        const E = "question" === blk ? "questionEnabled" : "turnEndEnabled";
+        const Vol = "question" === blk ? "questionVolume" : "turnEndVolume";
+        const Freq = "question" === blk ? "questionFreq" : "turnEndFreq";
+        const Decay = "question" === blk ? "questionDecayMs" : "turnEndDecayMs";
+        return [
+          h("h2", { key: blk + "-title", style: titleStyle }, title),
+          h("p", { key: blk + "-intro", style: introStyle }, desc),
+          h("div", { key: blk + "-enabled", style: rowStyle },
+            h("span", { style: labelStyle }, "启用"),
+            h("span", { style: controlStyle },
+              h("input", {
+                type: "checkbox",
+                checked: v[E] !== false,
+                disabled: disabled,
+                onChange: (ev) => update(E, ev.target.checked),
+              })),
+          ),
+          h(BufferedSlider, { key: blk + "-vol", labelText: "音量", min: 0, max: 1, step: 0.05, value: Number(v[Vol]) || 0.7, disabled: disabled, display: pct, onSubmit: (n) => update(Vol, n) }),
+          h(BufferedSlider, { key: blk + "-freq", labelText: "音色频率(Hz)", min: 120, max: 2000, step: 10, value: Number(v[Freq]) || 880, disabled: disabled, display: (n) => Math.round(n) + " Hz", onSubmit: (n) => update(Freq, n) }),
+          h(BufferedSlider, { key: blk + "-decay", labelText: "衰减时长(ms)", min: 100, max: 2000, step: 50, value: Number(v[Decay]) || 900, disabled: disabled, display: (n) => Math.round(n) + " ms", onSubmit: (n) => update(Decay, n) }),
+          h("div", { key: blk + "-preview", style: lastRowStyle },
+            h("span", { style: labelStyle }, "试听"),
+            h("span", { style: controlStyle },
+              h("button", { style: buttonStyle, disabled: disabled, onClick: previewBtn }, "播放一声")),
+          ),
+        ];
+      };
       return h("div", { style: wrapStyle },
-        h("h2", { style: titleStyle }, "回合结束提示音"),
-        h("p", { style: introStyle }, "agent 回合结束时(转入空闲)由浏览器 JS 播放一声合成“叮”——纯前端 Web Audio,宿主不发声、不弹 Windows/系统通知。"),
-        h("div", { key: "enabled", style: rowStyle },
-          h("span", { style: labelStyle }, "启用"),
-          h("span", { style: controlStyle },
-            h("input", {
-              type: "checkbox",
-              checked: v.enabled !== false,
-              disabled: disabled,
-              onChange: (ev) => update("enabled", ev.target.checked),
-            })),
-        ),
-        sliderRow("音量",
-          { min: 0, max: 1, step: 0.05, value: Number(v.volume) || 0.7, disabled: disabled, onChange: (ev) => update("volume", Number(ev.target.value)) },
-          pct(v.volume)),
-        sliderRow("音色频率(Hz)",
-          { min: 120, max: 2000, step: 10, value: Number(v.freq) || 880, disabled: disabled, onChange: (ev) => update("freq", Number(ev.target.value)) },
-          Math.round(Number(v.freq) || 880) + " Hz"),
-        sliderRow("衰减时长(ms)",
-          { min: 100, max: 2000, step: 50, value: Number(v.decayMs) || 900, disabled: disabled, onChange: (ev) => update("decayMs", Number(ev.target.value)) },
-          Math.round(Number(v.decayMs) || 900) + " ms"),
-        h("div", { key: "preview", style: lastRowStyle },
-          h("span", { style: labelStyle }, "试听"),
-          h("span", { style: controlStyle },
-            h("button", {
-              style: buttonStyle,
-              disabled: disabled,
-              onClick: () => play({ volume: v.volume, freq: v.freq, decayMs: v.decayMs }),
-            }, "播放一声")),
-        ),
+        h("h2", { style: { ...titleStyle, fontSize: 16 } }, "提示音配置"),
+        h("p", { style: introStyle }, "两种场景各自提示音,由浏览器 JS 纯前端 Web Audio 合成——宿主不发声、不弹 Windows/系统通知。设置写入 $DSH_HOME/settings.yaml 的 falling-ts-web-ding 段。"),
+        ...block("question", "弹出用户选择",
+          "harness 弹出用户选择题(浏览器对话区的选择题卡片)时播放一声“叮”,提醒你回来作答。检测走浏览器 DOM(QuestionComposer 的 data-question-key 锚点),宿主端不参与。",
+          () => play({ volume: v.questionVolume, freq: v.questionFreq, decayMs: v.questionDecayMs })),
+        ...block("turnEnd", "回合结束",
+          "agent 回合结束时(agent/status 转入 idle)播放一声“叮”。宿主只在命中 idle 转换时发信号,声音由浏览器合成。",
+          () => play({ volume: v.turnEndVolume, freq: v.turnEndFreq, decayMs: v.turnEndDecayMs })),
         h("p", { style: { gridColumn: "1 / 3", color: hintColor, fontSize: 12, lineHeight: 1.55 } },
-          "浏览器自动播放策略:首次与页面交互(点击/按键)或点击试听后,回合结束提示音才会出声。设置写入 $DSH_HOME/settings.yaml 的 falling-ts-web-ding 段。"));
+          "浏览器自动播放策略:首次与页面交互(点击/按键)或点击任一试听后,提示音才会出声。"));
     }
 
     /**
@@ -575,12 +655,20 @@ window.__ModuleLoader__.load({
             d.value = s.value;
             d.writable = s.writable;
           });
+          questionValueRef = s.value;                       // 供 question 观察器回调读取
+          installQuestionObserver(s.value);                 // 一次性安装 DOM 观察器(幂等)
           if (s.status === "ready") maybePlayFromValue(s.value);
         } catch { /* never let a cosmetic derive take down the panel */ }
       };
       const unsub = scope.subscribe(derive);
       derive();
       ctx.effect(() => unsub, "web-ding: scope subscription");
+      ctx.effect(() => () => {
+        if (questionObserver) {
+          questionObserver.disconnect();
+          questionObserver = null;
+        }
+      }, "web-ding: question observer cleanup");
       const injected = () => ({
         hooks: { ding: store },
         update: (field, value) => scope.set(field, value),
@@ -593,7 +681,7 @@ window.__ModuleLoader__.load({
         name: "settings.section",
         id: "web-ding",
         order: 80,
-        label: () => "回合结束提示音",
+        label: () => "提示音配置",
         inject: injected,
       }, DingSection));
     }

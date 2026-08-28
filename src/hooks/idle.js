@@ -55,9 +55,9 @@ export async function handleAgentStatus(ctx, payload) {
     if (prev === 'idle') return // repeated idle tick — already handled
     if (!everBusy.has(sid)) return // fresh session that never ran — no ding
 
-    const enabled = await readRawSetting(ctx, 'enabled')
+    const enabled = await readRawSetting(ctx, 'turnEndEnabled')
     if (enabled === false) {
-      ctx.logger.debug(`[web-ding] ${sid}: idle transition ignored — enabled=false`)
+      ctx.logger.debug(`[web-ding] ${sid}: idle transition ignored — turnEndEnabled=false`)
       return
     }
     await publishDingSignal(ctx, sid)
