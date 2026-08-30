@@ -170,14 +170,18 @@ window.__ModuleLoader__.load({
     async function fetchSessionTitle(sessionId) {
       if (!sessionId) return undefined;
       try {
-        const res = await fetch(location.origin + "/api/session.list", {
+        // 当前 build 的统一 RPC 形态是斜杠 Typert 网关（/api/<ns>/<method> +
+        // payload.args 描述符参数）；旧的句点面（/api/session.list + method
+        // "session.list"）返回 404，标题永远取不到。改用会话控制器的
+        // session/list（args._request 为保留空请求）。
+        const res = await fetch(location.origin + "/api/session/list", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             type: "client-request",
             rpcId: (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now())),
-            method: "session.list",
-            payload: {},
+            method: "session/list",
+            payload: { args: { _request: {} } },
           }),
         });
         const json = await res.json();
