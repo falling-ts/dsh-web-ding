@@ -687,8 +687,64 @@ window.__ModuleLoader__.load({
     }
 
     // ── 设置分区 UI --------------------------------------------------------------
-    const divider = "rgba(0,0,0,0.08)";
-    const hintColor = "rgba(0,0,0,0.45)";
+    /**
+     * 主题感知的颜色别名（浅色 / 暗色两套）。与 dsh-force-compact 注入的规则**逐字相同**
+     * （同一份 `--fcts-` 工作区命名空间；两者都按元素 id 幂等，谁先注入都一样）。
+     *
+     * 本插件是 plain JS、无构建步骤，组件用内联 style 而非 CSS Module，但内联 style 里的
+     * var() 照样沿 DOM 继承解析，所以：样式表只定义变量，组件只引用 `var(--fcts-*)`。
+     *
+     * - **浅色**：逐个取改动前的字面值（`rgba(0,0,0,…)` 系），浅色外观逐字节不变。
+     * - **暗色**（选择器 `body[data-ds-dark-theme]`，官方 ui-theme 切主题时打的属性）：
+     *   改指上游语义别名。**说明文字取 `--dsw-alias-label-primary`**——暗色下解析为
+     *   `rgb(249,250,251)`（纯白）；分隔/边框取 `border-l*`。官方主题包按肤定义这些别名
+     *   （packages/client/ui-theme/src/styles/design-platform.css），随主题自动翻转。
+     *
+     * 注意：toast 与右侧消息面板是**浮层通知**，刻意保持 Win11 风格的浅色玻璃质感
+     * （白底深字），两种主题下都可读，故不走这套设置区别名。
+     */
+    const THEME_TOKENS_CSS = [
+      "body{",
+      "--fcts-text-hint:rgba(0,0,0,0.45);",
+      "--fcts-text-muted:rgba(0,0,0,0.55);",
+      "--fcts-text-body:rgba(0,0,0,0.65);",
+      "--fcts-line:rgba(0,0,0,0.08);",
+      "--fcts-line-soft:rgba(0,0,0,0.18);",
+      "--fcts-line-strong:rgba(0,0,0,0.22);",
+      "--fcts-fill-subtle:rgba(0,0,0,0.14);",
+      "--fcts-fill-off:rgba(0,0,0,0.16);",
+      "--fcts-fill-off-hover:rgba(0,0,0,0.24);",
+      "--fcts-fill-hover:rgba(0,0,0,0.06);",
+      "}",
+      "body[data-ds-dark-theme]{",
+      "--fcts-text-hint:var(--dsw-alias-label-primary);",
+      "--fcts-text-muted:var(--dsw-alias-label-secondary);",
+      "--fcts-text-body:var(--dsw-alias-label-secondary);",
+      "--fcts-line:var(--dsw-alias-border-l2);",
+      "--fcts-line-soft:var(--dsw-alias-border-l2);",
+      "--fcts-line-strong:var(--dsw-alias-border-l3);",
+      "--fcts-fill-subtle:var(--dsw-alias-border-l3);",
+      "--fcts-fill-off:var(--dsw-alias-interactive-bg-active);",
+      "--fcts-fill-off-hover:var(--dsw-alias-interactive-bg-hover-accent);",
+      "--fcts-fill-hover:var(--dsw-alias-interactive-bg-hover);",
+      "}",
+    ].join("");
+
+    /**
+     * 确保主题别名样式表已挂在 <head>（幂等，至多一次）。
+     * @returns void
+     */
+    function ensureThemeTokensInlined() {
+      if (typeof document === "undefined") return;
+      if (document.getElementById("falling-ts-theme-tokens")) return;
+      const el = document.createElement("style");
+      el.id = "falling-ts-theme-tokens";
+      el.textContent = THEME_TOKENS_CSS;
+      document.head.appendChild(el);
+    }
+
+    const divider = "var(--fcts-line)";
+    const hintColor = "var(--fcts-text-hint)";
     const gridCols = "200px minmax(0,1fr)";
     const wrapStyle = { padding: "4px 0" };
     const titleStyle = { margin: "2px 0 2px", fontSize: 15, lineHeight: 1.4 };
@@ -699,7 +755,7 @@ window.__ModuleLoader__.load({
     const controlStyle = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" };
     const hintStyle = { gridColumn: "1 / 3", color: hintColor, fontSize: 12, lineHeight: 1.55 };
     const valueStyle = { fontVariantNumeric: "tabular-nums", fontSize: 13, color: hintColor, minWidth: 52, textAlign: "right" };
-    const buttonStyle = { padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.22)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 500 };
+    const buttonStyle = { padding: "6px 14px", borderRadius: 8, border: "1px solid var(--fcts-line-strong)", background: "transparent", cursor: "pointer", fontSize: 13, fontWeight: 500 };
     const inputRangeStyle = { flex: 1, minWidth: 140 };
 
     /**
@@ -811,6 +867,8 @@ window.__ModuleLoader__.load({
       // 绑定翻译入口:此后所有 UI 文案(toast / 消息面板 / 设置分区)都跟随活动语言。
       // ctx.locale.bind 返回的函数按调用时刻读取活动语言,故切换语言无需重注册。
       tr = ctx.locale.bind(NS);
+      // 主题别名（浅色/暗色两套取值）。注入失败只影响取色、不影响功能。
+      ctx.effect(() => ensureThemeTokensInlined(), "web-ding: theme tokens");
       // zh 是键集事实源,en/ja/ko 必须与之逐键对齐(缺键时查找链回落到 en)。
       // 语言目录项与字典分开登记:addLanguage 可能因兄弟插件已注册同一 id 而让位
       // (见 contributeLanguages),字典注册则始终由本插件持有。
