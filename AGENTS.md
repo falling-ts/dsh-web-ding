@@ -41,6 +41,31 @@
 的解锁方式是客户端一次性用户手势预热(pointerdown/keydown)+ "试听"按钮;
 页面后台标签内 AudioContext 可能被浏览器挂起,属浏览器策略,README 已说明。
 
+## 界面文案与语言(i18n,2026-09-17 增补)
+
+toast、右侧消息面板与设置分区的**每一句文案都归 locale 服务所有**,代码里不得出现硬编码
+副本(上游 `packages/client/AGENTS.md` 的 locale-owned copy 红线)。本插件的三处 UI 全部
+经模块级 `tr` 取词,`tr` 在 `apply` 里绑定到 `ctx.locale.bind("settings.webDing")`——绑定
+函数按**调用时刻**读活动语言,因此切换语言不需要重注册任何东西。
+
+**支持语言**:`zh` / `en` / `ja`(日本語) / `ko`(한국어)。zh 是键集事实源,其余三份必须
+逐键对齐;缺键**不报错**,只会沿查找链回落到 en(再回落 `common` 命名空间,最后显示键名),
+所以键集一致性由探针守住。
+
+**ja/ko 经语言包缝贡献**:上游 `@deepseek-ai/dsh-client-locale` 只内置 zh/en,
+`ctx.locale.addLanguage({ id, label, fallback })` 是其余语言的扩展点(`label` 用该语言
+自述,fallback 链必须以 `en` 为终点)。`dsh-force-compact` 贡献同样的两个 id,两个插件各自
+可独立安装;先到者拥有目录项,后到者命中 `already registered`——`contributeLanguages`
+只吞这一种错(其余照抛),且只为真正添加的项登记 disposer。
+
+**用户数据不入词典**:会话标题、会话 id、时间戳都是数据,原样展示;只有其周围的模板
+(`doneTitle: "{title} 已完成"`、`sessionLabel: "会话 {id}…"`)走词典,经 `{name}` 占位符
+插值。消息缓存里存的是数据字段(`at`/`title`/`sessionId`/`timeText`),模板在渲染时才套,
+因此切换语言不会篡改已有记录。
+
+**验证**:`node exploration/i18n-parity-probe.mjs`(词典键集/语言包/硬编码副本扫描);
+两个插件共用同一份探针,它在一次运行里同时校验二者。
+
 ## 状态与约束
 
 - Host 半部无 timer(命名空间安装的 bounded retry 是安装簿记,成功即自取消,

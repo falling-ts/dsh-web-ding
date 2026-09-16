@@ -45,8 +45,164 @@ window.__ModuleLoader__.load({
     /** 宿主侧设置命名空间(settings.get 读取的键)。 */
     const NS_SETTINGS = "falling-ts-web-ding";
 
-    /** 必需服务(slots 提供分区注册;settingsScope 由 ui-settings 提供)。 */
-    const inject = ["slots", "settingsScope"];
+    /** 该分区拥有的文案命名空间。 */
+    const NS = "settings.webDing";
+
+    /** 必需服务(slots 提供分区注册;settingsScope 由 ui-settings 提供;locale 提供词典与 t)。 */
+    const inject = ["slots", "locale", "settingsScope"];
+
+    /**
+     * 翻译入口。apply 时绑定到 ctx.locale.bind(NS)——绑定函数保留稳定身份、按
+     * 调用时刻读取活动语言。所有产品可见文案(toast、右侧消息面板、设置分区)都
+     * 经它取词,不再有硬编码副本。
+     *
+     * 词典按上游约定走 locale 查找链:活动语言 → 其 fallback 链 → en → common
+     * 命名空间 → 键名本身。模块求值到 apply 之间不渲染任何 DOM,故未绑定期间的
+     * 回落值只在异常路径可见。
+     */
+    let tr = (key) => key;
+
+    // ── 词典 --------------------------------------------------------------------
+    // zh 是键集事实源(上游约定),en/ja/ko 必须与之逐键对齐——缺键不会报错,只会
+    // 静默回落到 en,故键集一致性由 exploration/i18n-parity-probe.mjs 守住。
+    // ja / ko 由本插件作为**语言包**贡献(上游 @deepseek-ai/dsh-client-locale 只内置
+    // zh/en),见下方 contributeLanguages。`{name}` 为占位符插值。
+    const zh = {
+      nav: "提示音配置",
+      intro: "两种场景各自提示音,由浏览器 JS 纯前端 Web Audio 合成——宿主不发声、不弹 Windows/系统通知。设置写入 $DSH_HOME/settings.yaml 的 falling-ts-web-ding 段。",
+      unavailable: "设置不可用(宿主端未注册 falling-ts-web-ding 命名空间)。",
+      loading: "加载中…",
+      enable: "启用",
+      volume: "音量",
+      freq: "音色频率(Hz)",
+      decay: "衰减时长(ms)",
+      preview: "试听",
+      playOnce: "播放一声",
+      questionTitle: "弹出用户选择",
+      questionDesc: "harness 弹出用户选择题(浏览器对话区的选择题卡片)时播放一声“叮”,提醒你回来作答。检测走浏览器 DOM(QuestionComposer 的 data-question-key 锚点),宿主端不参与。",
+      turnEndTitle: "回合结束",
+      turnEndDesc: "agent 回合结束时(agent/status 转入 idle)播放一声“叮”。宿主只在命中 idle 转换时发信号,声音由浏览器合成。",
+      autoplayNote: "浏览器自动播放策略:首次与页面交互(点击/按键)或点击任一试听后,提示音才会出声。",
+      toastBody: "agent 已完成回合——浏览器播放一声“叮”。",
+      doneTitle: "{title} 已完成",
+      emptyList: "暂无回合结束消息",
+      drawerTitle: "回合结束消息",
+      clearAll: "全部删除",
+      deleteWord: "删除",
+      sessionLabel: "会话 {id}…",
+      unitHz: "{value} Hz",
+      unitMs: "{value} ms",
+    };
+    const en = {
+      nav: "Notification sounds",
+      intro: "Each scenario has its own sound, synthesized entirely in the browser with the Web Audio API — the host plays nothing and raises no Windows/system notification. Settings land under the falling-ts-web-ding section of $DSH_HOME/settings.yaml.",
+      unavailable: "Settings unavailable (the host has not registered the falling-ts-web-ding namespace).",
+      loading: "Loading…",
+      enable: "Enabled",
+      volume: "Volume",
+      freq: "Tone frequency (Hz)",
+      decay: "Decay time (ms)",
+      preview: "Preview",
+      playOnce: "Play once",
+      questionTitle: "User question appears",
+      questionDesc: "Plays a ding when the harness raises a user question (the question card in the browser conversation view), calling you back to answer. Detection runs on the browser DOM (the QuestionComposer data-question-key anchor); the host takes no part.",
+      turnEndTitle: "Turn ended",
+      turnEndDesc: "Plays a ding when the agent's turn ends (agent/status becomes idle). The host only signals the idle transition; the browser synthesizes the sound.",
+      autoplayNote: "Browser autoplay policy: sound starts only after your first interaction with the page (click or keypress) or after clicking either Preview.",
+      toastBody: "The agent finished its turn — the browser played a ding.",
+      doneTitle: "{title} — done",
+      emptyList: "No turn-end messages yet",
+      drawerTitle: "Turn-end messages",
+      clearAll: "Delete all",
+      deleteWord: "Delete",
+      sessionLabel: "Session {id}…",
+      unitHz: "{value} Hz",
+      unitMs: "{value} ms",
+    };
+    const ja = {
+      nav: "通知音の設定",
+      intro: "2 つの場面それぞれに通知音があり、ブラウザの Web Audio API だけで合成します——ホストは音を鳴らさず、Windows／システム通知も出しません。設定は $DSH_HOME/settings.yaml の falling-ts-web-ding セクションに保存されます。",
+      unavailable: "設定を利用できません(ホスト側で falling-ts-web-ding 名前空間が登録されていません)。",
+      loading: "読み込み中…",
+      enable: "有効",
+      volume: "音量",
+      freq: "音色の周波数(Hz)",
+      decay: "減衰時間(ms)",
+      preview: "試聴",
+      playOnce: "1 回鳴らす",
+      questionTitle: "ユーザーへの質問が出たとき",
+      questionDesc: "harness がユーザーへの質問(ブラウザの会話ビューに出る質問カード)を表示したときに「チン」と鳴らし、回答へ戻るきっかけを作ります。検出はブラウザの DOM(QuestionComposer の data-question-key アンカー)で行い、ホスト側は関与しません。",
+      turnEndTitle: "ターン終了時",
+      turnEndDesc: "agent のターンが終了したとき(agent/status が idle へ遷移)に「チン」と鳴らします。ホストは idle 遷移のシグナルだけを出し、音はブラウザが合成します。",
+      autoplayNote: "ブラウザの自動再生ポリシー:ページを最初に操作する(クリック／キー入力)か、いずれかの試聴をクリックした後でないと音は鳴りません。",
+      toastBody: "agent がターンを終了しました——ブラウザが「チン」と鳴らしました。",
+      doneTitle: "{title} が完了しました",
+      emptyList: "ターン終了メッセージはまだありません",
+      drawerTitle: "ターン終了メッセージ",
+      clearAll: "すべて削除",
+      deleteWord: "削除",
+      sessionLabel: "セッション {id}…",
+      unitHz: "{value} Hz",
+      unitMs: "{value} ms",
+    };
+    const ko = {
+      nav: "알림음 설정",
+      intro: "두 상황마다 각자의 알림음이 있고, 브라우저의 Web Audio API만으로 합성합니다——호스트는 소리를 내지 않고 Windows/시스템 알림도 띄우지 않습니다. 설정은 $DSH_HOME/settings.yaml의 falling-ts-web-ding 섹션에 저장됩니다.",
+      unavailable: "설정을 사용할 수 없습니다(호스트에서 falling-ts-web-ding 네임스페이스를 등록하지 않았습니다).",
+      loading: "불러오는 중…",
+      enable: "사용",
+      volume: "음량",
+      freq: "음색 주파수(Hz)",
+      decay: "감쇠 시간(ms)",
+      preview: "미리 듣기",
+      playOnce: "한 번 재생",
+      questionTitle: "사용자 질문이 뜰 때",
+      questionDesc: "harness가 사용자 질문(브라우저 대화 영역의 질문 카드)을 띄울 때 '딩' 소리를 내어 답하러 돌아오게 합니다. 감지는 브라우저 DOM(QuestionComposer의 data-question-key 앵커)에서 하고 호스트는 관여하지 않습니다.",
+      turnEndTitle: "턴 종료 시",
+      turnEndDesc: "agent의 턴이 끝날 때(agent/status가 idle로 전환) '딩' 소리를 냅니다. 호스트는 idle 전환 신호만 보내고 소리는 브라우저가 합성합니다.",
+      autoplayNote: "브라우저 자동 재생 정책: 페이지를 처음 조작하거나(클릭/키 입력) 아무 미리 듣기나 클릭한 뒤에야 소리가 납니다.",
+      toastBody: "agent가 턴을 마쳤습니다——브라우저가 '딩' 소리를 재생했습니다.",
+      doneTitle: "{title} 완료",
+      emptyList: "아직 턴 종료 메시지가 없습니다",
+      drawerTitle: "턴 종료 메시지",
+      clearAll: "전체 삭제",
+      deleteWord: "삭제",
+      sessionLabel: "세션 {id}…",
+      unitHz: "{value} Hz",
+      unitMs: "{value} ms",
+    };
+
+    /**
+     * 把本插件贡献的语言(ja / ko)注册进 locale 目录。
+     *
+     * 上游只内置 zh / en(LOCALE_IDS 为 ['zh','en']);'ja'/'ko' 这类 id 是**语言包
+     * 插件**的扩展点:addLanguage 会把它们加进设置页「语言」下拉,并让浏览器语言
+     * 探测(先精确匹配、再按主语言子标签匹配)命中它们。label 用该语言自述,
+     * fallback 必须已注册且以 en 为终点——这里直接落到内置的 en。
+     *
+     * 幂等容错:dsh-force-compact 也贡献同样的两种语言(两个插件必须各自能独立
+     * 安装,不能约定只由其中一个注册)。先到者拥有该目录项,后到者命中
+     * "already registered" 而让位——字典仍按 id 生效,只是该语言目录项的生存期
+     * 不归本插件所有。返回的 disposer 只撤销本插件真正添加的那几项。
+     * @param {object} locale - ctx.locale(LocaleRuntime)。
+     * @returns {() => void} 撤销本插件添加的语言目录项。
+     */
+    function contributeLanguages(locale) {
+      const owned = [];
+      const languages = [
+        { id: "ja", label: "日本語", fallback: "en" },
+        { id: "ko", label: "한국어", fallback: "en" },
+      ];
+      for (const lang of languages) {
+        try {
+          owned.push(locale.addLanguage(lang));
+        } catch (error) {
+          const message = String(error && error.message ? error.message : error);
+          if (!/is already registered/.test(message)) throw error;
+        }
+      }
+      return () => { for (const dispose of owned) dispose(); };
+    }
 
     // ── Web Audio "叮" 播放器 --------------------------------------------------
     // 完全前端合成:无音频资产、无系统通知。三个正弦振荡器叠加:
@@ -265,7 +421,7 @@ window.__ModuleLoader__.load({
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
       });
       const title = document.createElement("span");
-      title.textContent = "回合结束";
+      title.textContent = tr("turnEndTitle");
       Object.assign(title.style, { fontSize: 14, fontWeight: 600, letterSpacing: 0.2 });
       const closeBtn = document.createElement("button");
       closeBtn.type = "button";
@@ -285,7 +441,7 @@ window.__ModuleLoader__.load({
       head.appendChild(title);
       head.appendChild(closeBtn);
       const text = document.createElement("div");
-      text.textContent = msg.title ? msg.title + " 已完成" : "agent 已完成回合——浏览器播放一声“叮”。";
+      text.textContent = msg.title ? tr("doneTitle", { title: msg.title }) : tr("toastBody");
       Object.assign(text.style, { marginTop: 10, lineHeight: 1.65, color: "rgba(0,0,0,0.66)" });
       const foot = document.createElement("div");
       foot.textContent = timeText;
@@ -329,7 +485,7 @@ window.__ModuleLoader__.load({
       const list = loadNotifyCache();
       if (!list.length) {
         const empty = document.createElement("div");
-        empty.textContent = "暂无回合结束消息";
+        empty.textContent = tr("emptyList");
         Object.assign(empty.style, {
           padding: "56px 20px", textAlign: "center",
           color: "rgba(0,0,0,0.42)", fontSize: 13, lineHeight: 1.6,
@@ -353,13 +509,14 @@ window.__ModuleLoader__.load({
         timeEl.textContent = m.timeText;
         Object.assign(timeEl.style, { fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" });
         const subEl = document.createElement("div");
-        subEl.textContent = m.title ? m.title + " 已完成" : (m.sessionId ? "会话 " + String(m.sessionId).slice(0, 12) + "…" : "回合结束");
+        subEl.textContent = m.title ? tr("doneTitle", { title: m.title })
+          : (m.sessionId ? tr("sessionLabel", { id: String(m.sessionId).slice(0, 12) }) : tr("turnEndTitle"));
         Object.assign(subEl.style, { fontSize: 12.5, color: "rgba(0,0,0,0.5)", marginTop: 4 });
         info.appendChild(timeEl);
         info.appendChild(subEl);
         const del = document.createElement("button");
         del.type = "button";
-        del.textContent = "删除";
+        del.textContent = tr("deleteWord");
         Object.assign(del.style, {
           border: "1px solid rgba(0,0,0,0.14)", background: "transparent",
           borderRadius: 8, padding: "5px 12px", cursor: "pointer",
@@ -410,11 +567,11 @@ window.__ModuleLoader__.load({
         flexShrink: 0,
       });
       const titleEl = document.createElement("span");
-      titleEl.textContent = "回合结束消息";
+      titleEl.textContent = tr("drawerTitle");
       Object.assign(titleEl.style, { fontSize: 16, fontWeight: 700, letterSpacing: 0.2 });
       const clearBtn = document.createElement("button");
       clearBtn.type = "button";
-      clearBtn.textContent = "全部删除";
+      clearBtn.textContent = tr("clearAll");
       Object.assign(clearBtn.style, {
         border: "1px solid rgba(0,0,0,0.14)", background: "transparent",
         borderRadius: 8, padding: "5px 12px", cursor: "pointer",
@@ -593,13 +750,13 @@ window.__ModuleLoader__.load({
       const ph = hintStyle;
       if (snap.status === "unavailable") {
         return h("div", { style: wrapStyle },
-          h("h2", { style: titleStyle }, "提示音配置"),
-          h("p", { style: ph }, "设置不可用(宿主端未注册 falling-ts-web-ding 命名空间)。"));
+          h("h2", { style: titleStyle }, tr("nav")),
+          h("p", { style: ph }, tr("unavailable")));
       }
       if (snap.status === "loading" || value === undefined) {
         return h("div", { style: wrapStyle },
-          h("h2", { style: titleStyle }, "提示音配置"),
-          h("p", { style: ph }, "加载中…"));
+          h("h2", { style: titleStyle }, tr("nav")),
+          h("p", { style: ph }, tr("loading")));
       }
       const disabled = !snap.writable;
       const v = (value && typeof value === "object") ? value : {};
@@ -614,7 +771,7 @@ window.__ModuleLoader__.load({
           h("h2", { key: blk + "-title", style: titleStyle }, title),
           h("p", { key: blk + "-intro", style: introStyle }, desc),
           h("div", { key: blk + "-enabled", style: rowStyle },
-            h("span", { style: labelStyle }, "启用"),
+            h("span", { style: labelStyle }, tr("enable")),
             h("span", { style: controlStyle },
               h("input", {
                 type: "checkbox",
@@ -623,27 +780,27 @@ window.__ModuleLoader__.load({
                 onChange: (ev) => update(E, ev.target.checked),
               })),
           ),
-          h(BufferedSlider, { key: blk + "-vol", labelText: "音量", min: 0, max: 1, step: 0.05, value: Number(v[Vol]) || 0.7, disabled: disabled, display: pct, onSubmit: (n) => update(Vol, n) }),
-          h(BufferedSlider, { key: blk + "-freq", labelText: "音色频率(Hz)", min: 120, max: 2000, step: 10, value: Number(v[Freq]) || 880, disabled: disabled, display: (n) => Math.round(n) + " Hz", onSubmit: (n) => update(Freq, n) }),
-          h(BufferedSlider, { key: blk + "-decay", labelText: "衰减时长(ms)", min: 100, max: 2000, step: 50, value: Number(v[Decay]) || 900, disabled: disabled, display: (n) => Math.round(n) + " ms", onSubmit: (n) => update(Decay, n) }),
+          h(BufferedSlider, { key: blk + "-vol", labelText: tr("volume"), min: 0, max: 1, step: 0.05, value: Number(v[Vol]) || 0.7, disabled: disabled, display: pct, onSubmit: (n) => update(Vol, n) }),
+          h(BufferedSlider, { key: blk + "-freq", labelText: tr("freq"), min: 120, max: 2000, step: 10, value: Number(v[Freq]) || 880, disabled: disabled, display: (n) => tr("unitHz", { value: Math.round(n) }), onSubmit: (n) => update(Freq, n) }),
+          h(BufferedSlider, { key: blk + "-decay", labelText: tr("decay"), min: 100, max: 2000, step: 50, value: Number(v[Decay]) || 900, disabled: disabled, display: (n) => tr("unitMs", { value: Math.round(n) }), onSubmit: (n) => update(Decay, n) }),
           h("div", { key: blk + "-preview", style: lastRowStyle },
-            h("span", { style: labelStyle }, "试听"),
+            h("span", { style: labelStyle }, tr("preview")),
             h("span", { style: controlStyle },
-              h("button", { style: buttonStyle, disabled: disabled, onClick: previewBtn }, "播放一声")),
+              h("button", { style: buttonStyle, disabled: disabled, onClick: previewBtn }, tr("playOnce"))),
           ),
         ];
       };
       return h("div", { style: wrapStyle },
-        h("h2", { style: { ...titleStyle, fontSize: 16 } }, "提示音配置"),
-        h("p", { style: introStyle }, "两种场景各自提示音,由浏览器 JS 纯前端 Web Audio 合成——宿主不发声、不弹 Windows/系统通知。设置写入 $DSH_HOME/settings.yaml 的 falling-ts-web-ding 段。"),
-        ...block("question", "弹出用户选择",
-          "harness 弹出用户选择题(浏览器对话区的选择题卡片)时播放一声“叮”,提醒你回来作答。检测走浏览器 DOM(QuestionComposer 的 data-question-key 锚点),宿主端不参与。",
+        h("h2", { style: { ...titleStyle, fontSize: 16 } }, tr("nav")),
+        h("p", { style: introStyle }, tr("intro")),
+        ...block("question", tr("questionTitle"),
+          tr("questionDesc"),
           () => play({ volume: v.questionVolume, freq: v.questionFreq, decayMs: v.questionDecayMs })),
-        ...block("turnEnd", "回合结束",
-          "agent 回合结束时(agent/status 转入 idle)播放一声“叮”。宿主只在命中 idle 转换时发信号,声音由浏览器合成。",
+        ...block("turnEnd", tr("turnEndTitle"),
+          tr("turnEndDesc"),
           () => play({ volume: v.turnEndVolume, freq: v.turnEndFreq, decayMs: v.turnEndDecayMs })),
         h("p", { style: { gridColumn: "1 / 3", color: hintColor, fontSize: 12, lineHeight: 1.55 } },
-          "浏览器自动播放策略:首次与页面交互(点击/按键)或点击任一试听后,提示音才会出声。"));
+          tr("autoplayNote")));
     }
 
     /**
@@ -651,6 +808,17 @@ window.__ModuleLoader__.load({
      * @param {import('@deepseek-ai/cordis').Context} ctx - client 根上下文。
      */
     function apply(ctx) {
+      // 绑定翻译入口:此后所有 UI 文案(toast / 消息面板 / 设置分区)都跟随活动语言。
+      // ctx.locale.bind 返回的函数按调用时刻读取活动语言,故切换语言无需重注册。
+      tr = ctx.locale.bind(NS);
+      // zh 是键集事实源,en/ja/ko 必须与之逐键对齐(缺键时查找链回落到 en)。
+      // 语言目录项与字典分开登记:addLanguage 可能因兄弟插件已注册同一 id 而让位
+      // (见 contributeLanguages),字典注册则始终由本插件持有。
+      ctx.effect(() => {
+        const disposeLanguages = contributeLanguages(ctx.locale);
+        const disposeDicts = ctx.locale.register(NS, { zh, en, ja, ko });
+        return () => { disposeDicts(); disposeLanguages(); };
+      }, "web-ding: dictionaries and languages");
       const scope = ctx.settingsScope.bind({ namespace: NS_SETTINGS });
       const store = createSnapshotStore({ status: "loading", value: undefined, writable: false });
       const derive = () => {
@@ -688,7 +856,7 @@ window.__ModuleLoader__.load({
         name: "settings.section",
         id: "web-ding",
         order: 80,
-        label: () => "提示音配置",
+        label: () => tr("nav"),
         inject: injected,
       }, DingSection));
     }
