@@ -9,7 +9,7 @@
  * 导出,经 dsh.client 声明被 client module 系统自动组成并服务。
  *
  * 职责:
- *   1. settingsScope 镜像 falling-ts-web-ding 命名空间,订阅其快照翻转——这
+ *   1. configForms 镜像 falling-ts-web-ding 命名空间,订阅其快照翻转——这
  *      就是宿主的"事件时钟":宿主在 agent/status idle 转变时写入 signal 字段,
  *      经 settings/document-updated 广播到达这里。
  *   2. 检测新的 'done' 信号(at 严格大于本页面最后播放的 at 才响应,首帧只做
@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
     const React = require("react");
     const h = React.createElement;
-    // 基线外部(web 平台预载):把 settingsScope 镜像成 uSES 安全的 SnapshotStore。
+    // 基线外部(web 平台预载):把 configForms 镜像成 uSES 安全的 SnapshotStore。
     // `createSnapshotStore` 的正确来源是 PLATFORM_MODULES seed 表内的静态包
     // `@deepseek-ai/dsh-client-store`；`@deepseek-ai/dsh-client-runtime` 不在共享模块表
     // 里，require 它会命中 client-modules 的 "missed the module table" 落空错误。
@@ -48,8 +48,8 @@ window.__ModuleLoader__.load({
     /** 该分区拥有的文案命名空间。 */
     const NS = "settings.webDing";
 
-    /** 必需服务(slots 提供分区注册;settingsScope 由 ui-settings 提供;locale 提供词典与 t)。 */
-    const inject = ["slots", "locale", "settingsScope"];
+    /** 必需服务(slots 提供分区注册;configForms 由 ui-settings 提供;locale 提供词典与 t)。 */
+    const inject = ["slots", "locale", "configForms"];
 
     /**
      * 翻译入口。apply 时绑定到 ctx.locale.bind(NS)——绑定函数保留稳定身份、按
@@ -69,7 +69,7 @@ window.__ModuleLoader__.load({
     // zh/en),见下方 contributeLanguages。`{name}` 为占位符插值。
     const zh = {
       nav: "提示音配置",
-      intro: "两种场景各自提示音,由浏览器 JS 纯前端 Web Audio 合成——宿主不发声、不弹 Windows/系统通知。设置写入 $DSH_HOME/settings.yaml 的 falling-ts-web-ding 段。",
+      intro: "两种场景各自提示音,由浏览器 JS 纯前端 Web Audio 合成——宿主不发声、不弹 Windows/系统通知。设置写入 profile 的 cordis.patch.yml(falling-ts-web-ding 段)。",
       unavailable: "设置不可用(宿主端未注册 falling-ts-web-ding 命名空间)。",
       loading: "加载中…",
       enable: "启用",
@@ -95,7 +95,7 @@ window.__ModuleLoader__.load({
     };
     const en = {
       nav: "Notification sounds",
-      intro: "Each scenario has its own sound, synthesized entirely in the browser with the Web Audio API — the host plays nothing and raises no Windows/system notification. Settings land under the falling-ts-web-ding section of $DSH_HOME/settings.yaml.",
+      intro: "Each scenario has its own sound, synthesized entirely in the browser with the Web Audio API — the host plays nothing and raises no Windows/system notification. Settings land in the profile's cordis.patch.yml (falling-ts-web-ding section).",
       unavailable: "Settings unavailable (the host has not registered the falling-ts-web-ding namespace).",
       loading: "Loading…",
       enable: "Enabled",
@@ -121,7 +121,7 @@ window.__ModuleLoader__.load({
     };
     const ja = {
       nav: "通知音の設定",
-      intro: "2 つの場面それぞれに通知音があり、ブラウザの Web Audio API だけで合成します——ホストは音を鳴らさず、Windows／システム通知も出しません。設定は $DSH_HOME/settings.yaml の falling-ts-web-ding セクションに保存されます。",
+      intro: "2 つの場面それぞれに通知音があり、ブラウザの Web Audio API だけで合成します——ホストは音を鳴らさず、Windows／システム通知も出しません。設定は profile の cordis.patch.yml(falling-ts-web-ding セクション)に保存されます。",
       unavailable: "設定を利用できません(ホスト側で falling-ts-web-ding 名前空間が登録されていません)。",
       loading: "読み込み中…",
       enable: "有効",
@@ -147,7 +147,7 @@ window.__ModuleLoader__.load({
     };
     const ko = {
       nav: "알림음 설정",
-      intro: "두 상황마다 각자의 알림음이 있고, 브라우저의 Web Audio API만으로 합성합니다——호스트는 소리를 내지 않고 Windows/시스템 알림도 띄우지 않습니다. 설정은 $DSH_HOME/settings.yaml의 falling-ts-web-ding 섹션에 저장됩니다.",
+      intro: "두 상황마다 각자의 알림음이 있고, 브라우저의 Web Audio API만으로 합성합니다——호스트는 소리를 내지 않고 Windows/시스템 알림도 띄우지 않습니다. 설정은 profile의 cordis.patch.yml(falling-ts-web-ding 섹션)에 저장됩니다.",
       unavailable: "설정을 사용할 수 없습니다(호스트에서 falling-ts-web-ding 네임스페이스를 등록하지 않았습니다).",
       loading: "불러오는 중…",
       enable: "사용",
@@ -762,7 +762,7 @@ window.__ModuleLoader__.load({
      * 缓冲滑块(React state 本地缓冲,最流畅):拖动期间 onChange 只更新本地 state
      * (仅重渲染这一个 input + 显示值,不写设置、不触发 document-updated 广播),
      * 松手(mouseup/touchend)/失焦(blur)/键盘结束(keyup)时才提交一次 scope.set。
-     * 原实现 onChange 每动一格都 update → settings.yaml 写盘 + 全量广播 + 整块面板
+     * 原实现 onChange 每动一格都 update → 配置写盘 + 全量广播 + 整块面板
      * 重渲染,所以拖动卡。
      * @param {{fieldKey:string, labelText:string, min:number, max:number, step:number,
      *   value:number, disabled:boolean, display:(n:number)=>string, onSubmit:(n:number)=>void}} props
@@ -877,7 +877,10 @@ window.__ModuleLoader__.load({
         const disposeDicts = ctx.locale.register(NS, { zh, en, ja, ko });
         return () => { disposeDicts(); disposeLanguages(); };
       }, "web-ding: dictionaries and languages");
-      const scope = ctx.settingsScope.bind({ namespace: NS_SETTINGS });
+      // ui-settings 的 configForms 服务按命名空间交出 ConfigForm(getSnapshot/subscribe
+      // 与旧 settingsScope 同形:status 枚举为 'loading'|'ready'|'unavailable';set/unset/
+      // mutate 现在回答 Promise<boolean>,本插件的 update 回调忽略该返回值)。
+      const scope = ctx.configForms.get(NS_SETTINGS);
       const store = createSnapshotStore({ status: "loading", value: undefined, writable: false });
       const derive = () => {
         try {

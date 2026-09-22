@@ -21,97 +21,55 @@
  * @module @falling-ts/dsh-web-ding
  */
 
-import { registerNamespace } from './src/core/settings.js'
+import { buildConfigSchema, bindConfig } from './src/core/settings.js'
 import { handleAgentStatus } from './src/hooks/idle.js'
 
 /** @type {string} the function plugin's display name. */
 export const name = 'web-ding'
 
 /**
- * Register the `agent/status` listener and the `falling-ts-web-ding` settings
- * namespace (the "回合结束提示音" surface).
+ * The plugin's schemastery `Config` — the settings form namespace the Loader
+ * auto-derives for this entry (harness 0.1.7's Config-driven settings model,
+ * which replaced the removed `settings.register(ns, schema, { base })` API).
  *
- * No `inject` is declared: the `settings` service arrives with the preset
- * plane AFTER this plugin's boot-time effect runs, and a boot-time `inject`
- * would fail the boot assertion (the same late-mount ordering documented by
- * dsh-force-compact). The namespace registration is therefore lazy +
- * idempotent: attempted at boot and again atop every `agent/status` emission,
- * with a bounded self-cancelling retry while the service is still absent. The
- * retry is installation bookkeeping (it settles and cancels itself on
- * success) — not a persistent timer or long-lived state.
+ * `apply` receives the resolved values; the Host hooks read them through
+ * `bindConfig`. Top-level await because schemastery is resolved lazily: the bare
+ * specifier first, then the vendored copy when this plugin runs from a standalone
+ * checkout. `undefined` (schemastery unresolvable) simply leaves the entry with
+ * no settings form — the hooks then fall back to `DEFAULTS`.
+ */
+export const Config = await buildConfigSchema()
+
+/**
+ * Register the `agent/status` listener and declare the plugin's own settings
+ * form for the "回合结束提示音" surface.
+ *
+ * No boot-time `inject` is declared: the `settings` service mounts later than
+ * this plugin's boot effect (the same late-mount ordering documented by
+ * dsh-force-compact), so the form declaration rides a lazy `ctx.inject`.
+ * `configure({ auto: false })` tells the harness this plugin ships its OWN page
+ * (web/client.js registers a `settings.section`), so none must be generated.
  *
  * @param {import('@deepseek-ai/cordis').Context} ctx
+ * @param {object|undefined} config resolved plugin Config (schemastery volatile refs).
  */
-const __applyInner = (ctx) => {
+const __applyInner = (ctx, config) => {
+  bindConfig(config)
   ctx.logger.info('[web-ding] apply START; settings=' + (ctx.get('settings') !== undefined ? 'present' : 'ABSENT'))
 
-  // ── Lazy namespace install (settings service may arrive after boot) ──────
-  const settingsState = { settled: false, installed: false }
-  const RETRY_DELAY_MS = 1000
-  const RETRY_MAX_ATTEMPTS = 30
-  const retryTimer = { value: undefined }
-  const tryRegisterOnce = async () => {
-    if (settingsState.settled) return
-    const settings = ctx.get('settings')
-    if (settings === undefined || typeof settings.register !== 'function') return // keep retrying
-    try {
-      const ok = await registerNamespace(ctx)
-      settingsState.settled = true
-      if (ok) {
-        settingsState.installed = true
-        ctx.logger.info('[web-ding] registered settings namespace "falling-ts-web-ding"')
-      } else {
-        ctx.logger.warn('[web-ding] settings present but schema build failed — namespace NOT registered')
-      }
-    } catch (error) {
-      const message = error instanceof Error ? (error.stack || error.message) : String(error)
-      ctx.logger.warn(`[web-ding] settings namespace registration threw — ${message}`)
-    }
+  try {
+    ctx.inject(['settings'], (child) => {
+      child.effect(() => child.settings.configure({ auto: false }, ctx.fiber))
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    ctx.logger.warn(`[web-ding] settings.configure declaration failed (cosmetic only) — ${message}`)
   }
-  const maybeRetryRegister = () => {
-    if (settingsState.settled || retryTimer.value !== undefined) return
-    let attempts = 0
-    const attempt = () => {
-      retryTimer.value = undefined
-      if (settingsState.settled) return
-      attempts += 1
-      void (async () => {
-        await tryRegisterOnce()
-        if (settingsState.settled) {
-          if (retryTimer.value !== undefined) clearTimeout(retryTimer.value)
-          retryTimer.value = undefined
-          return
-        }
-        if (attempts >= RETRY_MAX_ATTEMPTS) {
-          settingsState.settled = true // give up; agent/status listeners stay as safety net
-          return
-        }
-        retryTimer.value = setTimeout(attempt, RETRY_DELAY_MS)
-      })().catch(() => {})
-    }
-    attempt()
-  }
-  const maybeRegisterSettingsNamespace = () => {
-    if (settingsState.settled) return
-    void (async () => {
-      await tryRegisterOnce()
-      if (!settingsState.settled) maybeRetryRegister()
-    })().catch(() => {})
-  }
-  // Cancel any pending retry on teardown.
-  ctx.effect(() => () => {
-    if (retryTimer.value !== undefined) clearTimeout(retryTimer.value)
-  }, 'web-ding: settings install retry cleanup')
-
-  // Fire the eager attempt once NOW so a cold start with no agent traffic
-  // still lands the namespace (the client panel depends on it).
-  maybeRegisterSettingsNamespace()
 
   // ── Turn-end ding: agent/status idle transition → publish 'done' signal ──
   // agent/status is a SYNC event; the heavy work (settings write) is handed off
   // to an async IIFE with its own catch so nothing escapes the dispatch.
   ctx.on('agent/status', (payload) => {
-    maybeRegisterSettingsNamespace() // re-armed; cheap no-op once settled
     void (async () => {
       await handleAgentStatus(ctx, payload)
     })().catch((error) => {
@@ -120,16 +78,17 @@ const __applyInner = (ctx) => {
     })
   })
 
-  ctx.logger.info('[web-ding] apply END (listeners + namespace attempts done)')
+  ctx.logger.info('[web-ding] apply END (listener registered; settings form declared)')
 }
 
 /**
  * Plugin entry.
  * @param {import('@deepseek-ai/cordis').Context} ctx
+ * @param {object|undefined} config resolved plugin Config (schemastery volatile refs).
  */
-export const apply = (ctx) => {
+export const apply = (ctx, config) => {
   try {
-    return __applyInner(ctx)
+    return __applyInner(ctx, config)
   } catch (error) {
     const message = error instanceof Error ? (error.stack || error.message) : String(error)
     try {

@@ -5,8 +5,8 @@
  * Why settings at all
  * ------------------
  * The browser client half mirrors the `falling-ts-web-ding` namespace through
- * `settingsScope.bind` → `createSnapshotStore`, so ANY field the Host writes
- * here is reflected in the browser live (the SettingsScope revision-fencing
+ * `configForms.get` → `createSnapshotStore`, so ANY field the Host writes
+ * here is reflected in the browser live (the ConfigForm revision-fencing
  * contract, the same `settings/document-updated` broadcast dsh-force-compact
  * rides for its liveUi badge). That is the ONLY sanctioned host→browser
  * live-data channel an independent plugin bundle can use.

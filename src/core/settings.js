@@ -27,13 +27,17 @@
  * @module @falling-ts/dsh-web-ding/settings
  */
 
-/** The settings namespace key (settings.get / settings.register address). */
+/** The settings form namespace key. It MUST equal this plugin's LOADER ENTRY ID
+ *  (`falling-ts-web-ding`, see cordis.patch.yml): harness 0.1.7 derives the form
+ *  namespace from `entry.options.id`, and the client half addresses it by that id. */
 export const NS = 'falling-ts-web-ding'
 
 /** The settings field carrying the host→browser turn-end signal. */
 export const SIGNAL_FIELD = 'signal'
 
-/** Defaults — also the base passed to settings.register. Two blocks, each with its own switch and tone. */
+/** Defaults — the schema `.default()` values in {@link buildConfigSchema} (harness
+ *  0.1.7 has no `{ base }` layer; defaults come from the schema). Two blocks, each
+ *  with its own switch and tone. */
 export const DEFAULTS = Object.freeze({
   // Block 1 — 弹出用户选择 (question popup ding), detected client-side on the DOM.
   questionEnabled: true,
@@ -48,20 +52,30 @@ export const DEFAULTS = Object.freeze({
 })
 
 /**
- * Read ONE raw field of the namespace without a full parse. Never throws.
- * @param {import('@deepseek-ai/cordis').Context} ctx
- * @param {string} field
- * @returns {Promise<unknown>} the raw stored value, or `undefined` when the
- *   settings service is not mounted or the field is unset.
+ * Live Config refs handed to `apply`. Every Host tunable is read through this
+ * holder, so a settings-form edit is picked up on the next read (the ConfigForm
+ * volatile-commit contract). Set once by the plugin entry.
  */
-export async function readRawSetting(ctx, field) {
+let liveConfig
+
+/**
+ * Bind the resolved plugin Config.
+ * @param {object|undefined} config schemastery-resolved Config (volatile refs).
+ */
+export function bindConfig(config) {
+  liveConfig = config
+}
+
+/**
+ * Read ONE live config field. Never throws.
+ * @param {string} field
+ * @returns {unknown} the current value, or `undefined` when unset/unavailable.
+ */
+export function readConfigField(field) {
   try {
-    const settings = ctx.get('settings')
-    if (settings === undefined || typeof settings.get !== 'function') return undefined
-    const value = settings.get(NS)
-    if (value === undefined || value === null) return undefined
-    if (typeof value !== 'object') return undefined
-    return value[field]
+    const ref = liveConfig === null || liveConfig === undefined ? undefined : liveConfig[field]
+    if (ref === undefined || ref === null || typeof ref.get !== 'function') return undefined
+    return ref.get()
   } catch {
     return undefined
   }
@@ -104,52 +118,40 @@ async function resolveZ() {
 }
 
 /**
- * Build the `falling-ts-web-ding` schema through @deepseek-ai/schemastery.
- * @returns {Promise<((section: unknown) => unknown) & { toJSON: () => unknown } | null>}
+ * Build the plugin's schemastery `Config` schema — the settings form namespace
+ * the Loader auto-derives for this entry.
+ *
+ * Harness 0.1.7 replaced the old `settings.register(ns, schema, { base })` API
+ * with a Config-driven model: a plugin exports `Config`, the form namespace is
+ * the LOADER ENTRY ID (`falling-ts-web-ding`), defaults come from `.default()`,
+ * and every field the form may write must be marked `.volatile()` (volatile-only
+ * edits commit in place; `settings.update` refuses non-volatile paths).
+ *
+ * Returns `undefined` when schemastery is unresolvable — the entry then simply
+ * has no settings form, and the Host hooks fall back to `DEFAULTS`.
+ * @returns {Promise<object|undefined>}
  */
-export async function buildSchema() {
+export async function buildConfigSchema() {
   try {
     const z = await resolveZ()
-    if (z === undefined) return null
+    if (z === undefined) return undefined
     return z.object({
       // Block 1 — 弹出用户选择 (question popup ding), client-side DOM detection.
-      questionEnabled: z.boolean().default(DEFAULTS.questionEnabled),
-      questionVolume: z.number().default(DEFAULTS.questionVolume),
-      questionFreq: z.number().default(DEFAULTS.questionFreq),
-      questionDecayMs: z.number().default(DEFAULTS.questionDecayMs),
+      questionEnabled: z.boolean().default(DEFAULTS.questionEnabled).volatile(),
+      questionVolume: z.number().default(DEFAULTS.questionVolume).volatile(),
+      questionFreq: z.number().default(DEFAULTS.questionFreq).volatile(),
+      questionDecayMs: z.number().default(DEFAULTS.questionDecayMs).volatile(),
       // Block 2 — 回合结束 (turn-end ding), Host agent/status idle transition.
-      turnEndEnabled: z.boolean().default(DEFAULTS.turnEndEnabled),
-      turnEndVolume: z.number().default(DEFAULTS.turnEndVolume),
-      turnEndFreq: z.number().default(DEFAULTS.turnEndFreq),
-      turnEndDecayMs: z.number().default(DEFAULTS.turnEndDecayMs),
+      turnEndEnabled: z.boolean().default(DEFAULTS.turnEndEnabled).volatile(),
+      turnEndVolume: z.number().default(DEFAULTS.turnEndVolume).volatile(),
+      turnEndFreq: z.number().default(DEFAULTS.turnEndFreq).volatile(),
+      turnEndDecayMs: z.number().default(DEFAULTS.turnEndDecayMs).volatile(),
       // TRANSIENT host→browser messenger (src/core/signal.js): host-written
       // { phase:'done', at, sessionId }. z.any() because the vendored
       // schemastery exposes only object/any/string/number/boolean/array.
-      signal: z.any(),
+      signal: z.any().volatile(),
     })
   } catch {
-    return null
-  }
-}
-
-/**
- * Register the namespace when a `settings` service is mounted. Idempotent.
- * Falls back to a callable placeholder schema so the panel still loads when
- * schemastery is unresolvable.
- * @param {import('@deepseek-ai/cordis').Context} ctx
- * @returns {Promise<boolean>}
- */
-export async function registerNamespace(ctx) {
-  const settings = ctx.get('settings')
-  if (settings === undefined || typeof settings.register !== 'function') return false
-  const schema = await buildSchema()
-  const thirdArg = { base: { ...DEFAULTS } }
-  const placeholderSchema = (section) => section
-  placeholderSchema.toJSON = () => ({})
-  try {
-    settings.register(NS, schema !== null ? schema : placeholderSchema, thirdArg)
-    return true
-  } catch {
-    return false
+    return undefined
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@falling-ts/dsh-web-ding",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "DSH Cordis plugin: announces the moment an agent finishes (turns idle) by pushing a 'done' signal from the Host half into the falling-ts-web-ding settings namespace, which the browser client half mirrors live and answers with a synthesized 'ding' tone via the Web Audio API. The tone is played ENTIRELY by front-end JS in the browser — the Host/node backend never emits audio and no Windows/system notification is used.",
   "type": "module",
   "main": "./index.js",
@@ -18,11 +18,31 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-settings": ">=0.1.6-alpha.1"
+    "@deepseek-ai/cordis": ">=4.0.4",
+    "@deepseek-ai/dsh-agent": ">=0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-store": ">=0.1.7-alpha.1",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.7-alpha.1",
+    "@deepseek-ai/dsh-settings": ">=0.1.7-alpha.1",
+    "@deepseek-ai/schemastery": ">=3.18.4"
   },
   "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-locale": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-store": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings": {
+      "optional": true
+    },
     "@deepseek-ai/dsh-settings": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
       "optional": true
     }
   },

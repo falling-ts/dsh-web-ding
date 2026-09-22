@@ -8,5 +8,5 @@
 # browser client half mirrors and answers with a Web-Audio "ding".
 
 - insert:
-    - id: web-ding
+    - id: falling-ts-web-ding
       name: '@falling-ts/dsh-web-ding'

@@ -15,7 +15,7 @@ a pure-listener Host half + a browser client half connected by the official
 | Layer | What happens |
 |-------|--------------|
 | Host (`index.js` + `src/`) | Listens for the `agent/status` **idle transition** (all turns done, including sub-agents, before the next human turn; a fresh idle session that never ran, and repeated idle ticks, stay silent). Publishes `{ phase:'done', at, sessionId }` into the `falling-ts-web-ding` settings namespace. Never emits audio, never calls the OS. |
-| Browser (`web/client.js`) | Mirrors the namespace live via `settingsScope`. On a strictly-newer `done` signal it synthesizes a short `ding` (three sine oscillators + exponential decay envelopes) with the Web Audio API and plays it through the tab — and, at the same moment, pops a Win11-style toast in the bottom-right corner. Clicking the toast slides in a notification drawer listing every turn-end message (kept in browser `localStorage`, capped at 100, deduped by signal `at`), with per-message delete and a clear-all button. Everything stays front-end: no backend audio, no OS notification. |
+| Browser (`web/client.js`) | Mirrors the namespace live via `configForms`. On a strictly-newer `done` signal it synthesizes a short `ding` (three sine oscillators + exponential decay envelopes) with the Web Audio API and plays it through the tab — and, at the same moment, pops a Win11-style toast in the bottom-right corner. Clicking the toast slides in a notification drawer listing every turn-end message (kept in browser `localStorage`, capped at 100, deduped by signal `at`), with per-message delete and a clear-all button. Everything stays front-end: no backend audio, no OS notification. |
 
 ## Install
 
@@ -26,7 +26,7 @@ dsh plugin --profile web add github:falling-ts/dsh-web-ding
 Requires the web app to ship the client bundle (the `dsh.client` declaration in
 `package.json` does that automatically).
 
-## Configuration (`falling-ts-web-ding` namespace, $DSH_HOME/settings.yaml)
+## Configuration (`falling-ts-web-ding` namespace, stored in the profile's `cordis.patch.yml`)
 
 Two independent blocks, each with its own switch and its own tone:
 

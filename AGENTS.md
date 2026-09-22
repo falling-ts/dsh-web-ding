@@ -34,6 +34,53 @@
 不会重复响)。`at` 兼作序号:`Date.now()` 上叠加进程内单调高水位,避免同毫秒
 连续两次 idle 的序号碰撞。客户端仅在 `at > 本页面最后播放的 at` 时响应。
 
+## harness 0.1.7-alpha.2 适配(2026-09-23)
+
+peer 基线为 **`>=0.1.7-alpha.1`**(cordis `>=4.0.4`,schemastery `>=3.18.4`)。
+peer 清单按**实际用到的包**声明(除 cordis 外全部 `optional`):`dsh-settings`(设置表单与
+`settings.update`)、`dsh-agent`(`agent/status` 事件契约)、`schemastery`(Config schema),
+客户端 `dsh-client-ui-settings`(`configForms` + `settings.section`)、`dsh-client-locale`、
+`dsh-client-store`(`createSnapshotStore`)。
+0.1.7 改了 **settings 的两侧**,本插件 Host 与 Client 半部都要跟。
+
+**Host 半部(2026-09-23 修复;此前本节误判为"零改动",已更正)** —— 0.1.7 **删除了整套
+旧 settings API**:`settings.register(ns, schema, { base })` 与 `settings.get(ns)` 在
+`packages/settings/settings/src/index.ts` 已不存在(旧服务换成 `SettingsForms`,
+`settings-file` 整包删除)。新模型:
+
+- 插件**导出 schemastery `Config`**(字段标 `.volatile()`),`apply(ctx, config)` 收到
+  解析后的值,读值用 `config.<field>.get()`;默认值走 `.default()`,旧的 `{ base }`
+  第三参**没有等价物**;
+- **设置命名空间 = 该 profile 条目的 loader id**(`settings/src/index.ts` 用
+  `entry.options.id`),所以 `cordis.patch.yml` 的 `insert.id` 必须是
+  **`falling-ts-web-ding`**(与客户端常量一致);
+- 只有 `.volatile()` 字段可被表单写;`settings.update(ns, patch)` 仍在,但 `ns` 必须是
+  条目 id,且被写路径必须 volatile(`signal` 字段因此也标了 volatile);
+- 自带设置页面的插件应声明
+  `ctx.inject(['settings'], child => child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)))`;
+- 设置持久化载体从 `$DSH_HOME/settings.yaml` 变成 **profile 的 `cordis.patch.yml`**
+  (config-editor 写入)。
+
+本插件据此删除了 `registerNamespace` 与 30×1s 重试计时器,新增
+`buildConfigSchema` / `bindConfig` / `readConfigField`。
+
+**Client 半部** —— 服务名 **`settingsScope` → `configForms`**,取用方式从
+`ctx.settingsScope.bind({ namespace })` 变成 **`ctx.configForms.get(namespace)`**;
+旧名在 0.1.7 的 `packages/client` 里已全量消失(提供方换成 `settings-mirror.ts` +
+`config-form.ts`)。返回的 `ConfigForm` 与旧 `SettingsScope` **同形**:
+`getSnapshot`/`subscribe`/`set`/`unset`/`mutate` 都在,快照字段
+`status`/`value`/`writable` 也都在;两处差异:① `status` 枚举多了 `'loading'`
+(本插件本就只在 `'ready'` 时播,无需改);② 三个写方法从 `Promise<void>` 变成
+**`Promise<boolean>`**(本插件忽略返回值,无需改)。client `inject` 已是
+`['slots','locale','configForms']`。
+
+`agent/status`(同步、`{agent,status}`、`'idle'`)、`settings.section` 槽、
+`createSnapshotStore`、`dsh.client` 清单字段、`settings/document-updated` 广播在
+0.1.6→0.1.7 **均未变**。
+
+端到端验证(0.1.7-alpha.2):`settings/describe` 出现 `falling-ts-web-ding`
+(`autoGenerate=false`,9 个字段——含宿主写的瞬态 `signal`),跑一轮后 `signal` 成功写入 profile 配置。
+
 ## 为什么是 browser 端播放
 
 集合约定的目标场景(用户要求):声音与通知一律走**前端 JS**,不走 Node 后端、
