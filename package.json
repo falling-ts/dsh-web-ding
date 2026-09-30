@@ -1,12 +1,13 @@
 {
   "name": "@falling-ts/dsh-web-ding",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "DSH Cordis plugin: announces the moment an agent finishes (turns idle) by pushing a 'done' signal from the Host half into the falling-ts-web-ding settings namespace, which the browser client half mirrors live and answers with a synthesized 'ding' tone via the Web Audio API. The tone is played ENTIRELY by front-end JS in the browser — the Host/node backend never emits audio and no Windows/system notification is used.",
   "type": "module",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
     "./client": "./web/client.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "files": [
@@ -14,8 +15,11 @@
     "src/",
     "web/",
     "assets/",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
   ],
+  "icon": "./icon.svg",
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.4",
@@ -57,6 +61,7 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-store"
       ]
     }

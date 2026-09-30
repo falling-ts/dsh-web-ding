@@ -13,7 +13,7 @@
   **宿主的 Host 半部看不到 question/requested 帧**(该帧走 connection 层
   MuxFrame,Host 插件无订阅缝),所以这一块识别完全在浏览器侧完成,宿主不参与。
 - **块 2 — 回合结束(turn-end)**:**Host 半部是纯监听器**,只监听
-  `agent/status`,在其 idle **转变**时把一条 `{ phase:'done', at, sessionId }`
+  `agent/status`,在其 idle **转变**时把一条 `{ phase:'done', at, sessionId, title }`
   信号写进 `falling-ts-web-ding` 命名空间的 `signal` 字段(经
   `settings.update`,走官方 `settings/document-updated` 广播镜像到浏览器)。
   Host **绝不**发声,也绝**不**发起 Windows/系统通知。
@@ -30,9 +30,27 @@
 
 `falling-ts-web-ding.signal` 是**插件私有的瞬态信使**,完全复刻 dsh-force-compact
 的 `liveUi` 通道模式:宿主唯一写入方、客户端只读、故意与其它字段一样持久化到
-`settings.yaml`(无害残留——客户端首帧只做 `lastAt` 基线、不播放,重启残留
-不会重复响)。`at` 兼作序号:`Date.now()` 上叠加进程内单调高水位,避免同毫秒
-连续两次 idle 的序号碰撞。客户端仅在 `at > 本页面最后播放的 at` 时响应。
+`settings.yaml`(无害残留——见下文首帧语义)。载荷是
+**`{ phase:'done', at, sessionId?, title? }`**;`at` 兼作序号:`Date.now()` 上叠加进程内
+单调高水位,避免同毫秒连续两次 idle 的序号碰撞。客户端仅在 `at > 本页面最后播放的 at` 时响应。
+
+**会话标题随信号走(2026-09-30 改)** —— `title` 由 **Host** 半部在 idle 转变时从
+`ctx.get('sessionProjections').snapshot(session).values.title`(官方 `title` 投影单元,
+即会话列表行读的同一份)读出,与 `sessionId` 一起写进信号;读失败一律降级为"没有 `title`
+字段",**绝不**影响叮一声(见 `wd-signal-title-probe.mjs` 的 7 种降级用例)。客户端**不再**
+自己发 RPC 取标题:
+
+- 旧实现让浏览器半部手拼 wire 信封 + 自铸 `rpcId` 调 `/api/session/list`,违反
+  `packages/client/AGENTS.md` 的 "rpcId is strictly bidirectional … minting stays in
+  Connection",并把"当前 build 的传输形态"知识(句点 → 斜杠那次漂移)塞进了一条纯装饰路径;
+- 新实现符合 `references/practices.md` 的取向:客户端不自己折叠会话事件,值在 Host 侧算好再送。
+  Host 本来就持有 `agent.session`,零额外成本。
+
+**首帧语义(2026-09-30 修正)** —— `lastAt === null` 时的基线:命名空间里**有**残留 done 信号
+→ 以它的 `at` 为基线且不播(页面打开前的信号不补响);**没有**残留(全新 home / 从未跑过回合)
+→ 基线取 `0`,于是本安装的**第一声** done 照常响。旧实现一律把首帧信号当残留吞掉,真浏览器实测
+在全新 home 上表现为"第一次回合结束不响、第二次才响"(3099 全新 home 复现:写入 signal 后振荡器
+计数仍为 0)。
 
 ## harness 0.1.7-alpha.2 适配(2026-09-23)
 
@@ -101,12 +119,86 @@ peer 下界保持 `>=0.2.0-rc.1`（0.2.0 列车；rc.1 → rc.2 是同列车补�
 `settings/describe` 出现 `falling-ts-web-ding` 命名空间。**本仓库源码与文档无需改动**，
 故 version 不动。
 
+## 音频解锁加固（2026-09-30，排查"完成或询问都不叮一声"）
+
+**症状**：回合结束(块 2)与弹出用户选择(块 1)两条路径都听不到声音,但右下角 toast 与
+消息缓存(`falling-ts-web-ding.notify.v1`)照常出现。
+
+**逐层排查结论(活的 3080 实例 + 真实浏览器)**——检测与广播这两层都是好的:
+
+- Host 半部确实在真回合结束时写 `signal`(`settings/describe` 可见新的 `at`/`sessionId`);
+- 客户端半部确实收到广播并**已经调度了 3 个振荡器**、写了缓存、弹了 toast:
+  真 `agent/status` idle 转变端到端复现,真实 `ask_user_question` 卡片挂载也复现;
+- 唯一会静音的是 **AudioContext 没解锁**。真 Chromium 实测到浏览器警告
+  `The AudioContext was not allowed to start. It must be resumed (or created) after a
+  user gesture on the page`——提示音到达时若页面**还没有用户手势**,`playDing` 会在
+  手势之外惰性创建 AudioContext,浏览器策略拒绝启动它;旧实现还会在该挂起上下文上
+  当场排程(挂起期 `currentTime` 冻结),把这一声压到以后某次 resume 的瞬间迟到播放,
+  于是表现为"toast 弹了、声音没有"。
+
+**修复(`web/client.js`,纯客户端)**:
+
+1. 解锁监听不再 `{ once: true }` + 冒泡阶段,改为**捕获阶段**挂
+   `pointerdown / mousedown / keydown / click / touchstart / focus` 且**不一次性**:
+   已在 `running` 时短路,未运行才 `resume()`。理由:一次性监听会被"本模块求值之前
+   发生的那次手势"打空(此后再无补解锁机会);冒泡监听会被宿主 UI 里可能的
+   `stopPropagation()` 吞掉。任何一次后续手势都能补上解锁。
+2. `playDing` 在 `ctx.state !== "running"` 时**先 `resume()`、成功后再按当时的时间轴排程**;
+   resume 被拒(无手势的浏览器策略)则保持静音,绝不抛出、绝不排一声幻音。
+3. 已 `running` 时立即排程——延迟与改动前逐字一致。
+
+**监听器归 apply 所有(2026-09-30 规范收敛)**:`UNLOCK_GESTURES` 的注册/撤销成对收进
+`installUnlockListeners()`,由 `apply` 里的
+`ctx.effect(() => installUnlockListeners(), "web-ding: audio unlock listeners")` 拥有。此前它在
+**工厂求值期**直接挂(工厂有副作用、且永无 disposer),违反 `references/ui-plugin.md` 的
+"Keep factories free of side effects … register … listeners … inside `apply` with
+`ctx.effect`/`ctx.on` and return their cleanup functions"。撤销必须用与注册相同的 `capture`
+取值,否则撤不掉。"不一次性"的性质与所有权无关:插件存活期间任何一次手势都还能补解锁。
+
+**验证**(全部退出码 0):
+
+- `node exploration/wd-audio-unlock-apply-probe.mjs`(31 项,离线可重复:按浏览器
+  `__ModuleLoader__.load` 契约真装载 `web/client.js` 并跑 `apply(ctx)`,用桩 AudioContext
+  覆盖 挂起→resume→排程、已运行立即排程、resume 被拒保持静音、监听器形状(捕获/非一次性/
+  多手势)、后续手势补解锁、已运行短路;并额外锁住**工厂无副作用**(求值期零监听)、
+  **apply 所有权**(撤销器把 6 个监听全部摘掉、capture 取值一致)、**标题随信号进缓存**、
+  **客户端零 RPC**,以及**首帧语义的两种情形**——有残留不播 / 无残留则第一声必须播。
+  后一情形由第二次独立求值的模块实例覆盖,因为基线闩锁是模块级的,一个进程只能验一次首帧);
+- `node exploration/wd-signal-title-probe.mjs`(27 项,离线:直接 import Host 的
+  `src/hooks/idle.js` + `src/core/signal.js`,桩 `settings`/`sessionProjections`,
+  覆盖 标题读取、只写 `signal` 一个字段、idle 转变闩锁(新建会话不响 / 重复 tick 不响 /
+  `turnEndEnabled=false` 不响)、**7 种标题降级**(服务缺失 / 无 `snapshot` / 抛异常 /
+  无 `values` / 未折叠 / 空白 / 非字符串)都必须照响且不带 `title`、settings 写入被拒不上抛、
+  同毫秒两次发布的 `at` 不撞号);
+- `node exploration/wd-ding-trigger-probe.mjs 3080`(活实例 8 项断言:按真实 host 路径写
+  `signal`(含 `title`)→ 页面调度 3 个振荡器 + toast + 缓存,并断言**缓存记录带上了那个标题**;
+  该探针曾复现上面那条 autoplay 拒绝警告)。
+
+诊断期间另跑过一次性探针(真回合 end-to-end、在 GUI 里真发一问触发真实
+`QuestionComposer`、以及从本机 Pake/WebView2 窗口的 LevelDB 里挖
+`falling-ts-web-ding.notify.v1` 记录)——结论都写在上面,脚本随诊断结束清理,只留上面三个
+可复用的检查。
+
+**真回合端到端复验(2026-09-30)**:`node exploration/wd-browser-probe.mjs <port>` 用 wire 协议
+真跑一个回合,缓存里落下的记录是
+`{"at":…,"timeText":"…","sessionId":"session-…","title":"Say exactly: ping"}` ——
+即 **Host 从 `sessionProjections` 读到的真实会话标题**经信号 → 镜像 → 客户端渲染全链贯通。
+
+**排障备忘**:本机用户的 GUI 是 **Pake/WebView2 窗口**(`pake-harness.exe`,user-data
+`%APPDATA%\Harness\EBWebView`),它的 localStorage 里能找到
+`falling-ts-web-ding.notify.v1` 与含真实 `at`/`sessionId` 的条目——这是"信号确实到达该
+窗口"的离线判据(该窗口的 WebView2 命令行**不带**
+`--autoplay-policy=no-user-gesture-required`,故默认策略要求用户手势,与上面结论一致)。
+若加固后仍无声,先点设置分区里的**「试听」**(真实手势;现在会先 resume 再播放)确认
+输出设备/窗口音量,再看是不是窗口被静音。
+
 ## 为什么是 browser 端播放
 
 集合约定的目标场景(用户要求):声音与通知一律走**前端 JS**,不走 Node 后端、
 不弹 Windows 通知。因此 Web Audio 合成是唯一合法发声路径。浏览器自动播放策略
-的解锁方式是客户端一次性用户手势预热(pointerdown/keydown)+ "试听"按钮;
-页面后台标签内 AudioContext 可能被浏览器挂起,属浏览器策略,README 已说明。
+的解锁方式是客户端手势预热(捕获阶段挂多种手势、由 `apply` 的 `ctx.effect` 拥有并在插件
+卸载时撤销,见上文"音频解锁加固")+「试听」按钮;页面后台标签内 AudioContext 可能被浏览器挂起,
+属浏览器策略,README 已说明。
 
 ## 主题(浅色 / 暗色):设置区颜色一律走 `--fcts-*`(2026-09-17 增补)
 
@@ -167,3 +259,54 @@ toast、右侧消息面板与设置分区的**每一句文案都归 locale 服�
 - 新增 Web Audio/UI 能力时保持"纯前端合成、零资产、零系统通知"的红线。
 - 消息缓存是浏览器侧数据(客户端写 `localStorage`,宿主不读不写):不参与
   settings.yaml、不进入 signal 通道;删除/清空操作只在前端进行。
+
+## 官方规范符合性(2026-09-30 评审)
+
+按上游 `docs/user/develop/**` + `packages/preset/agent-preset/skills/cordis-plugin-development/`
+(含 `references/{host-plugin,ui-plugin,practices}.md`) + `packages/AGENTS.md` /
+`packages/client/AGENTS.md` 逐条核对,本插件**已符合**的面:
+
+- 组合包 manifest:`dsh.bundle.patch` 指向 `./cordis.patch.yml`、patch 按**包名**引用、
+  `type: module`、`exports` 含 `./client` 与 `./package.json`、`files` 覆盖全部相对运行时
+  入口、`license`、双语 README;非 `private`(要发布)、`publishConfig.access: public`。
+- Host 插件导出形态:只具名导出 `name`/`Config`/`apply`,**无 default export**、不混形态
+  (混形态会让 Loader 丢掉 function plugin 的命名空间)。
+- 注册即 effect:`ctx.on('agent/status')` 走 `ctx.on`;设置表单声明、
+  语言字典、快照订阅、主题表、解锁监听全走 `ctx.effect` 并归还 disposer。
+- 可选服务用 `ctx.inject(['settings'], …)` / `ctx.get('sessionProjections')`,不用硬 `inject`。
+- 客户端模块契约:`__ModuleLoader__.load({ id })` 的 `id` **逐字等于包名**;React 走模块表;
+  `@deepseek-ai/dsh-client-store` 是 `PLATFORM_MODULES` 的**基线模块**,故不写
+  `dsh.client.external`(重复基线会被 `verify-client-packages` 判违规);
+  `immediately` 正确省略(只归基础设施行);未 require `ui-primitives`。
+- 客户端 Cordis `inject` = `["slots","locale","configForms"]`,与实际用到的服务一致;
+  `dsh.client.inject` 声明了三个客户端包(信息性边,preflight 显示 + HMR diff)。
+- UI 文案全部经 `ctx.locale` 词典(zh 键集为事实源 + ja/ko 经 `addLanguage` 贡献);
+  用户数据(标题/id/时间戳)不入词典。
+
+**显示元数据(`locale/*.json` + `icon`,2026-09-30 补齐)**:宿主 `readPluginMeta`
+(`packages/boot/app-boot/src/package-meta.ts`)按 `${specifier}/locale/en.json` 解析标题与描述、
+按清单的 `icon` 读图标,两者都要经 `exports` 发布。此前两个都缺 → 插件卡片直接显示
+package.json 里那一整段 npm 描述。现在 `locale/{en,zh}.json` 的 `meta.{title,description}` +
+`icon.svg` 齐备(`exports` 加 `"./locale/*.json"`,`files` 加 `locale/*.json` 与 `icon.svg`)。
+**注意:清单变更需要重启实例才生效**——profile-resolution 在启动时快照了插件的 exports 表,
+热重载只监视 profile 的清单/补丁层,不监视插件自己的 package.json。
+
+**已知偏离(有意的,勿"顺手修")**:
+
+1. **toast 与右侧抽屉直写 `document.body`**([`web/client.js`](web/client.js) 的 toast 层与
+   overlay)——`references/practices.md` 要求"不写自己组件之外的 DOM、不 append 到 body",
+   浮层的官方出口是 `shell.overlay` 槽。当前实现在两种主题下都可读且会自行移除,迁槽属结构性
+   改写,留待有意为之。
+2. **question 块观察宿主 DOM 的 `[data-question-key]`**:`[data-question-key]` 是宿主渲染的
+   内部属性,上游没有对外缝(Host 半部看不到 question 帧是事实),所以这是"框架没给出口"的
+   折中。**风险登记**:该锚点属宿主内部实现,上游一改这块就静默失效;`wd-ding-trigger-probe.mjs`
+   与 `wd-audio-unlock-apply-probe.mjs` 是它的回归闸门。
+3. **回合结束判据用 `agent/status` 的 idle 转变**(不是 durable 的 `turn/end`):`practices.md`
+   偏好 durable 事件,但本插件要的语义是"含子代理在内所有回合都结束、且下一个人类回合之前",
+   `turn/end` 会每回合响一次。这是**监听事件、不是轮询**(规范禁的是轮询)。
+4. **peer 只声明 `peerDependencies`(+ optional meta),不声明 `devDependencies`**:
+   `publish.zh.md` 建议共享宿主实例的 dsh 包同时进 peer 与 dev;本插件是 plain JS、无类型检查
+   与独立测试,profile 里由 dsh 提供实例,故只留 peer。
+5. **`--fcts-*` token 表的浅色分支是字面值**:`practices.md` 说"字面色只用于 artwork";
+   组件本身只用 `var()`,字面量只活在 token 表里,改成 `--dsw-alias-*` 会让浅色外观漂移,
+   与"浅色逐字节不变"的目标冲突,故保留。

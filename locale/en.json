@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Notification sounds",
+    "description": "Plays a browser-synthesized \"ding\" when an agent finishes a turn or pops a user question, with a Win11-style toast and a message list in the corner."
+  }
+}

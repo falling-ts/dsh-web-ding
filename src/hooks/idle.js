@@ -17,6 +17,12 @@
  * observed busy at least once (so the very first idle after session creation
  * stays silent).
  *
+ * The signal carries the session display title, read HERE from the
+ * `sessionProjections` `title` unit (see {@link readSessionTitle}) rather than
+ * fetched by the browser: this half owns the live session handle, and the
+ * client half stays a pure mirror of the settings namespace (no RPC, no wire
+ * method spelling in a cosmetic path).
+ *
  * @module @falling-ts/dsh-web-ding/turn-end
  */
 
@@ -27,6 +33,34 @@ import { publishDingSignal } from '../core/signal.js'
 const prevStatus = new Map()
 /** @type {Set<string>} sessionIds that have been observed busy (non-idle). */
 const everBusy = new Set()
+
+/**
+ * Best-effort read of the session display title at the idle transition — the
+ * `sessionProjections` `title` unit, the same projection the session list rows
+ * read.
+ *
+ * Fail-open by design: an absent registry, an unfolded unit, a session with no
+ * title yet, or an unexpected throw all resolve to `undefined`, and the browser
+ * then records the turn end without a title. The ding itself never depends on
+ * this value.
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ * @param {object|undefined} session live session handle of the agent that went idle
+ * @returns {string|undefined} the title, or undefined when unavailable
+ */
+function readSessionTitle(ctx, session) {
+  try {
+    if (typeof ctx?.get !== 'function') return undefined
+    if (session === undefined || session === null) return undefined
+    const registry = ctx.get('sessionProjections')
+    if (registry === undefined || registry === null) return undefined
+    if (typeof registry.snapshot !== 'function') return undefined
+    const snapshot = registry.snapshot(session)
+    const title = snapshot === undefined || snapshot === null ? undefined : snapshot.values?.title
+    return typeof title === 'string' && title.trim() !== '' ? title : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * Handle one `agent/status` emission. Never throws out of the listener (any
@@ -60,7 +94,7 @@ export async function handleAgentStatus(ctx, payload) {
       ctx.logger.debug(`[web-ding] ${sid}: idle transition ignored — turnEndEnabled=false`)
       return
     }
-    await publishDingSignal(ctx, sid)
+    await publishDingSignal(ctx, sid, readSessionTitle(ctx, session))
   } catch (error) {
     const message = error instanceof Error ? (error.stack || error.message) : String(error)
     try {

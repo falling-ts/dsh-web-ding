@@ -219,19 +219,55 @@ window.__ModuleLoader__.load({
       audio = { ctx };
       return audio;
     }
-    // 用户手势一次性预热:创建 AudioContext 并 resume,解除自动播放静音。
+    /**
+     * 用户手势预热:创建 AudioContext 并 resume,解除自动播放静音。
+     *
+     * 此前是 `{ once: true }` 的冒泡阶段监听。两处都不够稳:
+     * ① 一次性 —— 第一次手势若发生在本模块求值之前(页面刚加载、客户端包还在组装),
+     *    监听器当时还没挂上,这一枪就永久打空了;此后 AudioContext 只能由信号路径
+     *    在**手势之外**惰性创建,状态停在 `suspended`,浏览器策略下 `resume()` 不会生效
+     *    → 提示音全程静音(而 toast/消息缓存照常出现,症状是"只有声音不响")。
+     * ② 冒泡阶段 —— 宿主 UI 的键盘/指针处理里若有 `stopPropagation()`,原生事件到不了
+     *    window,监听器永不触发(实测本机 workspace 的 composer 不吞,但这是外部依赖)。
+     * 现在改为:**捕获阶段**挂多种手势,且**不一次性**;已经在运行时直接短路(每次手势
+     * 只是一次字符串比较),未运行时才 resume,故任何一次后续手势都能补上解锁。
+     */
     function warmup() {
       const a = ensureAudio();
-      if (a && a.ctx.state === "suspended") {
+      if (a && a.ctx.state !== "running") {
         void a.ctx.resume().catch(() => {});
       }
     }
-    if (typeof window !== "undefined") {
-      window.addEventListener("pointerdown", warmup, { once: true });
-      window.addEventListener("keydown", warmup, { once: true });
+    /**
+     * 手势类型表。注册与撤销必须用同一个 capture 取值,否则撤销不生效。
+     */
+    const UNLOCK_GESTURES = ["pointerdown", "mousedown", "keydown", "click", "touchstart", "focus"];
+    /**
+     * 注册解锁监听器并归还撤销函数。**由 `apply` 里的 `ctx.effect` 调用**,不在工厂
+     * 求值期安装:工厂必须无副作用,监听器是 apply 拥有的资源,插件卸载时随 effect
+     * 撤销(ui-plugin.md)。"不一次性"的性质与所有权无关——插件存活期间任何一次手势
+     * 都还能补上解锁,这才是防"首次手势打空"的关键。
+     * @returns {(() => void)|undefined} 撤销函数;无 window 时 undefined。
+     */
+    function installUnlockListeners() {
+      if (typeof window === "undefined") return undefined;
+      for (const type of UNLOCK_GESTURES) {
+        window.addEventListener(type, warmup, { capture: true, passive: true });
+      }
+      return () => {
+        if (typeof window.removeEventListener !== "function") return;
+        for (const type of UNLOCK_GESTURES) {
+          window.removeEventListener(type, warmup, { capture: true });
+        }
+      };
     }
     /**
      * 播放一声"叮"。
+     *
+     * 未解锁(`suspended`)时先 `resume()`、**成功后再按当时的时间轴排程**:挂起期间
+     * `currentTime` 是冻结的,此刻排程只会把这一声压到"以后某次 resume 的瞬间"才迟到
+     * 播放(甚至永不播放)——那正是"信号到了、toast 弹了,却没声音"的形态。
+     * 已 `running` 时立即排程,零延迟,手感与本改动前一致。
      * @param {{volume?: number, freq?: number, decayMs?: number}} opts
      * @returns {boolean} 是否成功调度(不支持 Web Audio 时返回 false)
      */
@@ -240,27 +276,32 @@ window.__ModuleLoader__.load({
       const a = ensureAudio();
       if (!a) return false;
       const ctx = a.ctx;
-      if (ctx.state === "suspended") void ctx.resume().catch(() => {});
       const volume = Math.min(1, Math.max(0, Number(o.volume) || 0.7));
       const freq = Math.min(4000, Math.max(80, Number(o.freq) || 880));
       const decay = Math.min(4000, Math.max(100, Number(o.decayMs) || 900)) / 1000;
-      const t0 = ctx.currentTime + 0.02;
-      const schedule = (f, peak, start, dur) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(f, start);
-        g.gain.setValueAtTime(0.0001, start);
-        g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + 0.012);
-        g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-        osc.connect(g);
-        g.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + dur + 0.05);
+      const scheduleDing = () => {
+        const t0 = ctx.currentTime + 0.02;
+        const schedule = (f, peak, start, dur) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(f, start);
+          g.gain.setValueAtTime(0.0001, start);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), start + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+          osc.connect(g);
+          g.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + dur + 0.05);
+        };
+        schedule(freq, volume * 0.55, t0, decay);                    // 基频主体
+        schedule(freq * 2.0, volume * 0.2, t0, decay * 0.75);        // 高八度泛音
+        schedule(freq * 2.5, volume * 0.07, t0 + 0.004, decay * 0.6); // 铃感泛音
+        return true;
       };
-      schedule(freq, volume * 0.55, t0, decay);                    // 基频主体
-      schedule(freq * 2.0, volume * 0.2, t0, decay * 0.75);        // 高八度泛音
-      schedule(freq * 2.5, volume * 0.07, t0 + 0.004, decay * 0.6); // 铃感泛音
+      if (ctx.state === "running") return scheduleDing();
+      // resume 被拒(无用户手势的浏览器策略)= 保持静音,等下一次手势补解锁;绝不抛出。
+      void ctx.resume().then(scheduleDing, () => {});
       return true;
     }
 
@@ -298,7 +339,7 @@ window.__ModuleLoader__.load({
       notifyListeners.add(fn);
       return () => notifyListeners.delete(fn);
     }
-    /** 记录一条"回合结束"消息(同一 at 只记一次)。title 为会话真实标题(查不到时省略)。 */
+    /** 记录一条"回合结束"消息(同一 at 只记一次)。title 为会话标题(信号未携带时省略)。 */
     function recordTurnEnd(at, sessionId, title) {
       const list = loadNotifyCache();
       if (list.some((m) => m.at === at)) return;
@@ -315,40 +356,6 @@ window.__ModuleLoader__.load({
       if (list.length > NOTIFY_CAP) list.length = NOTIFY_CAP;
       saveNotifyCache();
       emitNotifyChange();
-    }
-    /**
-     * 通过 session.list 查询会话的真实标题(projections.values.title)。
-     * 信号里只有 sessionId,标题不在事件负载中;失败或未找到时返回
-     * undefined,调用方回退到无标题展示。
-     * @param {string|undefined} sessionId
-     * @returns {Promise<string|undefined>}
-     */
-    async function fetchSessionTitle(sessionId) {
-      if (!sessionId) return undefined;
-      try {
-        // 当前 build 的统一 RPC 形态是斜杠 Typert 网关（/api/<ns>/<method> +
-        // payload.args 描述符参数）；旧的句点面（/api/session.list + method
-        // "session.list"）返回 404，标题永远取不到。改用会话控制器的
-        // session/list（args._request 为保留空请求）。
-        const res = await fetch(location.origin + "/api/session/list", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "client-request",
-            rpcId: (window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : String(Date.now())),
-            method: "session/list",
-            payload: { args: { _request: {} } },
-          }),
-        });
-        const json = await res.json();
-        const result = json && json.result;
-        const items = result && result.ok && Array.isArray(result.value && result.value.items) ? result.value.items : [];
-        const row = items.find((it) => it && it.sessionId === sessionId);
-        const title = row && row.projections && row.projections.values && row.projections.values.title;
-        return typeof title === "string" && title.trim() ? title : undefined;
-      } catch {
-        return undefined;
-      }
     }
     /** 删除单条"回合结束"消息(按 at 匹配)。 */
     function removeRecord(at) {
@@ -620,31 +627,34 @@ window.__ModuleLoader__.load({
     }
 
 // ── 命名空间快照 → 信号检测 → 播放 ------------------------------------------
-    // lastAt:本页面最后响应过的 signal.at。首帧(页面加载时已存在的残留)只做
-    // 基线、不播放;之后 at 严格增长的新 'done' 信号才叮一声。
+    // lastAt:本页面最后响应过的 signal.at;null = 还没观察到首帧。
+    // 首帧语义(2026-09-30 修正):页面**打开前**已存在的残留 done 信号只做基线、不播;
+    // 但"这个命名空间里从来没有过 signal"(全新 home、从未跑过回合)时基线取 0 —— 旧实现
+    // 一律把首帧信号当残留吞掉,于是**本安装的第一声 done 不响**,要到第二次回合结束才响
+    // (真浏览器复现:3099 全新 home 上写完 signal 后振荡器计数仍是 0)。
     let lastAt = null;
     function maybePlayFromValue(value) {
       if (!value || typeof value !== "object") return;
       const sig = value.signal;
-      if (!sig || typeof sig !== "object") return;
-      if (sig.phase !== "done") return;
-      const at = typeof sig.at === "number" ? sig.at : 0;
+      const isDone = !!sig && typeof sig === "object" && sig.phase === "done";
       if (lastAt === null) {
-        lastAt = at; // 首帧基线:页面打开前已发生的信号不播
-        return;
+        // 首帧:有残留就以残留为界(它不播);没有残留就从 0 起算,好让下一次 done 必播。
+        lastAt = isDone && typeof sig.at === "number" ? sig.at : 0;
+        if (isDone) return;
       }
+      if (!isDone) return;
+      const at = typeof sig.at === "number" ? sig.at : 0;
       if (!(at > lastAt)) return;
       lastAt = at;
       if (value.turnEndEnabled !== false) {
         playDing({ volume: value.turnEndVolume, freq: value.turnEndFreq, decayMs: value.turnEndDecayMs });
         const sessionId = typeof sig.sessionId === "string" ? sig.sessionId : undefined;
-        // 信号里只有 sessionId:异步查一次真实标题再落缓存与弹 toast。
-        void (async () => {
-          const title = await fetchSessionTitle(sessionId);
-          const msg = { at, sessionId, title };
-          recordTurnEnd(at, sessionId, title);
-          showTurnEndToast(msg);
-        })();
+        // 标题随信号一起来:Host 半部在 idle 转变时读 sessionProjections 的 title
+        // 投影并写进 signal。客户端因此**不再**发任何 RPC(自铸 rpcId 取 session/list
+        // 的写法已删除)——传输归 Connection,本半部只镜像本命名空间。
+        const title = typeof sig.title === "string" && sig.title.trim() !== "" ? sig.title : undefined;
+        recordTurnEnd(at, sessionId, title);
+        showTurnEndToast({ at, sessionId, title });
       }
     }
 
@@ -869,6 +879,8 @@ window.__ModuleLoader__.load({
       tr = ctx.locale.bind(NS);
       // 主题别名（浅色/暗色两套取值）。注入失败只影响取色、不影响功能。
       ctx.effect(() => ensureThemeTokensInlined(), "web-ding: theme tokens");
+      // 音频解锁监听器:属于 apply 拥有的资源(工厂期不得注册),卸载时随本 effect 撤销。
+      ctx.effect(() => installUnlockListeners(), "web-ding: audio unlock listeners");
       // zh 是键集事实源,en/ja/ko 必须与之逐键对齐(缺键时查找链回落到 en)。
       // 语言目录项与字典分开登记:addLanguage 可能因兄弟插件已注册同一 id 而让位
       // (见 contributeLanguages),字典注册则始终由本插件持有。
