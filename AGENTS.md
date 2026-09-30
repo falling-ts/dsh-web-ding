@@ -81,6 +81,26 @@ peer 清单按**实际用到的包**声明(除 cordis 外全部 `optional`):`dsh
 端到端验证(0.1.7-alpha.2):`settings/describe` 出现 `falling-ts-web-ding`
 (`autoGenerate=false`,9 个字段——含宿主写的瞬态 `signal`),跑一轮后 `signal` 成功写入 profile 配置。
 
+## harness 0.2.0-rc.2 复核（2026-09-30）：零改动
+
+peer 下界保持 `>=0.2.0-rc.1`（0.2.0 列车；rc.1 → rc.2 是同列车补丁，纯下界本就不该收窄——
+收窄只会让 0.2.0 的 boot 期 peer 预检在 rc.1 运行时静默禁用本插件）。逐缝复核结论：
+
+- 本插件依赖的两侧 settings 缝在 rc.2 全部未变：`ctx.configForms.get` + `ConfigForm` 五方法
+  （`getSnapshot`/`subscribe`/`set`/`unset`/`mutate`；快照状态枚举仍为
+  `'loading'|'ready'|'unavailable'`）、`ctx.slots.inject('settings.section')`（仍
+  `kind:'list'; scope:'root'`）、`settings.update(ns, patch)`、`settings/document-updated`
+  广播（仍在 `API_REMOTE_FORWARDED_EVENTS` 白名单里，`packages/api/remotes/src/remote-events.ts`）。
+- `agent/status`（同步、`{agent,status}`、`'idle'`）签名与 dispatch mode 未变。
+- question 块的 DOM 锚点 `data-question-key` 仍在
+  （`packages/client/ui-user-questions/src/client/QuestionComposer.tsx` 的 frame 根节点）。
+- 客户端 `ctx.locale`、`createSnapshotStore`、`dsh.client` 清单字段未变。
+
+端到端复核（3180 dev 实例 + `DSH_HOME=~/.dsh-web`）：`pluginInventory/list` 中
+`include:falling-ts-web-ding` 为 `enabled:true` / `fiberPhase:active`，
+`settings/describe` 出现 `falling-ts-web-ding` 命名空间。**本仓库源码与文档无需改动**，
+故 version 不动。
+
 ## 为什么是 browser 端播放
 
 集合约定的目标场景(用户要求):声音与通知一律走**前端 JS**,不走 Node 后端、
