@@ -96,7 +96,7 @@ peer 下界保持 `>=0.2.0-rc.1`（0.2.0 列车；rc.1 → rc.2 是同列车补�
   （`packages/client/ui-user-questions/src/client/QuestionComposer.tsx` 的 frame 根节点）。
 - 客户端 `ctx.locale`、`createSnapshotStore`、`dsh.client` 清单字段未变。
 
-端到端复核（3180 dev 实例 + `DSH_HOME=~/.dsh-web`）：`pluginInventory/list` 中
+端到端复核（3080 web 实例 + `DSH_HOME=~/.dsh-web`）：`pluginInventory/list` 中
 `include:falling-ts-web-ding` 为 `enabled:true` / `fiberPhase:active`，
 `settings/describe` 出现 `falling-ts-web-ding` 命名空间。**本仓库源码与文档无需改动**，
 故 version 不动。
