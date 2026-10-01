@@ -310,3 +310,39 @@ package.json 里那一整段 npm 描述。现在 `locale/{en,zh}.json` 的 `meta
 5. **`--fcts-*` token 表的浅色分支是字面值**:`practices.md` 说"字面色只用于 artwork";
    组件本身只用 `var()`,字面量只活在 token 表里,改成 `--dsw-alias-*` 会让浅色外观漂移,
    与"浅色逐字节不变"的目标冲突,故保留。
+
+## 设置导航图标（`settings.section` 没有 icon 选项，2026-10-01 增补）
+
+设置外壳（`ui-settings-general` 的 `SettingsRoot`）按 **section id 硬编码**导航字形：
+只有官方那几个 id（account / models / agent-presets / plugins / archived-sessions）
+有专属图标，其余一律回退同一枚齿轮。`settings.section` 的注册选项只有
+`id` / `order` / `label`（`SettingsSectionRow = { id, order, label }`），
+**第三方分区拿不到图标位**。上游 `settings.section` 的 slot 契约与运行时 slot 清单
+都只列这三项；工作区 pin 的 `ui-settings-general` 与桌面应用 `app.asar` 里打包的
+客户端同源，`navIcon()` 是同一份硬编码映射（已逐行核对）。
+
+生态通行做法（`dshmarket` 的 `settings-nav-icon`、`dsh-better-sidebar`、
+`dsh-skill-mcp-panel`）是：对话框挂载后按**本地化 label 文本**认领自己那一行，用
+CSS `mask-image` 画自己的标记并隐藏兜底齿轮。本插件照做
+（`installSettingsNavIcon`，在 `apply` 里装配），范围刻意收窄：
+
+- 只给「可见文本 === 本插件当前本地化分区名」的 `[role="dialog"] nav button` 打
+  `data-wd-nav-icon` 属性；空标签不认领任何行（语言未就绪时不会把整条导航标记掉）；
+- **不碰 React 节点**：不删不换，只加一个属性 + 注入一张 `<style>`；
+- 属性与样式表都由 `ctx.effect` 持有，随 fiber 卸载一并撤销；
+- `MutationObserver` 只在 React 改写导航时触发（切语言 / 分区增减即重新认领），
+  空闲零回调，与 LiveUI 贴皮那处观察器同类；
+- DOM 面不完整（宿主或测试桩只给了部分 API）时静默跳过——纯装饰，绝不把设置面板带下水。
+
+**标记是纯 alpha 模板**：mask 只用 alpha 通道，模板本身不命名任何颜色（一律
+`currentColor`，可见颜色来自 `background-color: currentColor`），所以它既不参与
+主题取色、也不在 `--fcts-*` 色表之外引入字面色。图形与 `icon.svg` 同一语义：铃身 + 摆锤 + 两侧声波弧（「提示音」）
+
+**为什么可以接受这次越界**（登记在案的偏离）：不改任何上游行为、不碰 slot 台账、
+不新增命令或服务；认领判据只读自己那一行的可见文本。上游一旦给 `settings.section`
+加上 `icon` 字段，就删掉 `installSettingsNavIcon` 改用官方字段。
+
+验证：`node exploration/fc-settings-nav-icon-probe.mjs`（三插件 × 27 项，离线：抽出
+三个 `web/client.js` 的真实实现 + 最小 DOM 桩，覆盖谓词边界 / mask 与样式表形状 /
+只认领自己那一行 / 切语言重认领 / 空标签释放 / 卸载清干净 / 新 fiber 可重装，并核对
+三者用的是**三个不同**的属性名与样式表 id）。

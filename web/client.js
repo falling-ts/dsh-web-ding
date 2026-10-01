@@ -873,11 +873,116 @@ window.__ModuleLoader__.load({
      * 注册分区、绑定命名空间、把信号接进播放器。
      * @param {import('@deepseek-ai/cordis').Context} ctx - client 根上下文。
      */
+    // ── 设置导航图标（`settings.section` 没有 icon 选项）───────────────────────
+    // 设置外壳（ui-settings-general 的 SettingsRoot）按 **section id 硬编码** 导航
+    // 字形：只有官方那几个 id 有专属图标，其余一律回退齿轮；而 settings.section 的
+    // 注册选项只有 id / order / label，第三方分区**拿不到图标位**。生态通行做法
+    // （dshmarket 的 settings-nav-icon、dsh-better-sidebar、dsh-skill-mcp-panel）是：
+    // 对话框挂载后按**本地化 label 文本**认领自己那一行，用 CSS `mask-image` 画自己
+    // 的标记并隐藏兜底的齿轮。这里照做，范围刻意收窄——
+    //   · 只给「可见文本 === 本插件当前本地化分区名」的那一行打属性，不碰外壳结构；
+    //   · 属性与注入的样式表都由 ctx.effect 持有，随 fiber 卸载一并撤销；
+    //   · 切语言时 MutationObserver 重新认领，标签与字形不会互相矛盾；
+    //   · 不新增订阅以外的内存态（一个 style 元素 + 一个属性）。
+    // 官方一旦给 settings.section 加上 icon 字段，就删掉这段、改用官方字段。
+    const NAV_ICON_ATTR = "data-wd-nav-icon";
+    /** 导航行定位：设置对话框 nav 里的按钮（外壳把每个 section 渲染成一个 button）。 */
+    const NAV_ROW_SELECTOR = "[role=\"dialog\"] nav button";
+    // mask 只用 alpha 通道：模板本身**不命名任何颜色**（一律 currentColor），
+    // 可见颜色来自 CSS 的 background-color: currentColor。
+
+    /** 本插件的导航标记（16×16，纯 alpha，颜色由 CSS 的 currentColor 提供）：铃身 + 摆锤 + 两侧声波弧 —— 与 icon.svg 同一个「提示音」语义。 */
+    const NAV_MARK_PATH = '<path d="M8 3.4a3 3 0 0 0-3 3v2.2L4 10.6h8l-1-2V6.4a3 3 0 0 0-3-3Z"/>' + '<path d="M6.7 11.2a1.3 1.3 0 0 0 2.6 0Z"/>' + '<path d="M2.4 6a3.4 3.4 0 0 0 0 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>' + '<path d="M13.6 6a3.4 3.4 0 0 1 0 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>';
+    /** 标记的 mask URL（空格等一律运行时编码，不手工转义）。 */
+    function navMarkUrl() {
+      return "data:image/svg+xml," + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">'
+        + NAV_MARK_PATH + "</svg>");
+    }
+    /** 被认领那一行的样式：藏掉外壳齿轮，用 mask 画标记（颜色取 currentColor）。 */
+    function navIconCss(maskUrl) {
+      const sel = "[" + NAV_ICON_ATTR + "]";
+      return [
+        sel + " > svg { display: none; }",
+        sel + "::before {",
+        "  content: '';",
+        "  flex: none;",
+        "  width: 16px;",
+        "  height: 16px;",
+        "  background-color: currentColor;",
+        "  -webkit-mask-image: url(\"" + maskUrl + "\");",
+        "  mask-image: url(\"" + maskUrl + "\");",
+        "  -webkit-mask-repeat: no-repeat;",
+        "  mask-repeat: no-repeat;",
+        "  -webkit-mask-position: center;",
+        "  mask-position: center;",
+        "  -webkit-mask-size: 16px 16px;",
+        "  mask-size: 16px 16px;",
+        "}",
+      ].join("\n");
+    }
+    /**
+     * 该行是不是本插件自己的。
+     *
+     * 这是本特性唯一的判断：可见文本 === 外壳当前投影的分区名。空标签不认领任何
+     * 行——语言未就绪时不能把整条导航都标记掉。
+     */
+    function isOwnNavRow(rowText, wantedLabel) {
+      const wanted = String(wantedLabel === undefined || wantedLabel === null ? "" : wantedLabel).trim();
+      if (wanted.length === 0) return false;
+      return String(rowText === undefined || rowText === null ? "" : rowText).trim() === wanted;
+    }
+    /**
+     * 装配设置导航图标。
+     * @param ctx - 客户端上下文（用于 effect 归属）。
+     * @param resolveLabel - 本插件当前的本地化分区名（每次同步现取，切语言即生效）。
+     */
+    function installSettingsNavIcon(ctx, resolveLabel) {
+      if (typeof document === "undefined") return;
+      ctx.effect(() => {
+        const tag = document.createElement("style");
+      // 装饰性特性：宿主（或测试桩）只提供部分 DOM 面时静默跳过，绝不把
+      // 设置面板带下水。
+      if (tag === undefined || tag === null || tag.dataset === undefined || tag.dataset === null) return;
+        tag.dataset.plugin = "@falling-ts/dsh-web-ding";
+        tag.dataset.pluginCss = "web-ding/settings-nav-icon";
+        tag.textContent = navIconCss(navMarkUrl());
+        document.head.appendChild(tag);
+        let disposed = false;
+        let scheduled = false;
+        const sync = () => {
+          scheduled = false;
+          if (disposed) return;
+          const wanted = resolveLabel();
+          for (const row of document.querySelectorAll(NAV_ROW_SELECTOR)) {
+            if (isOwnNavRow(row.textContent, wanted)) row.setAttribute(NAV_ICON_ATTR, "");
+            else row.removeAttribute(NAV_ICON_ATTR);
+          }
+        };
+        const schedule = () => {
+          if (scheduled || disposed) return;
+          scheduled = true;
+          queueMicrotask(sync);
+        };
+        sync();
+        const observer = new MutationObserver(schedule);
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        return () => {
+          disposed = true;
+          observer.disconnect();
+          for (const row of document.querySelectorAll("[" + NAV_ICON_ATTR + "]")) row.removeAttribute(NAV_ICON_ATTR);
+          if (typeof tag.remove === "function") tag.remove();
+        };
+      }, "web-ding: settings nav icon");
+    }
+
     function apply(ctx) {
       // 绑定翻译入口:此后所有 UI 文案(toast / 消息面板 / 设置分区)都跟随活动语言。
       // ctx.locale.bind 返回的函数按调用时刻读取活动语言,故切换语言无需重注册。
       tr = ctx.locale.bind(NS);
       // 主题别名（浅色/暗色两套取值）。注入失败只影响取色、不影响功能。
+      // 设置导航图标（机制与偏离登记见上方 installSettingsNavIcon）。
+      installSettingsNavIcon(ctx, () => tr("nav"));
       ctx.effect(() => ensureThemeTokensInlined(), "web-ding: theme tokens");
       // 音频解锁监听器:属于 apply 拥有的资源(工厂期不得注册),卸载时随本 effect 撤销。
       ctx.effect(() => installUnlockListeners(), "web-ding: audio unlock listeners");
