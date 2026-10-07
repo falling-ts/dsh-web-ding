@@ -28,6 +28,7 @@
 
 import { readConfigField } from '../core/settings.js'
 import { publishDingSignal } from '../core/signal.js'
+import { classifyAgent } from '../core/subagent.js'
 
 /** @type {Map<string,string>} sessionId → last observed agent/status. */
 const prevStatus = new Map()
@@ -94,7 +95,18 @@ export async function handleAgentStatus(ctx, payload) {
       ctx.logger.debug(`[web-ding] ${sid}: idle transition ignored — turnEndEnabled=false`)
       return
     }
-    await publishDingSignal(ctx, sid, readSessionTitle(ctx, session))
+
+    // Subagent gate: every delegated child's idle transition reaches this
+    // listener (root listeners are admitted for every dispatch key), so a
+    // parent fan-out would otherwise ding once per child plus once for the
+    // parent. Children stay silent unless explicitly opted in.
+    const { subagent, depth } = classifyAgent(session)
+    if (subagent && readConfigField('subagentEnabled') !== true) {
+      ctx.logger.debug(`[web-ding] ${sid}: subagent idle ignored — subagentEnabled=false (depth=${depth})`)
+      return
+    }
+
+    await publishDingSignal(ctx, sid, readSessionTitle(ctx, session), { subagent, depth })
   } catch (error) {
     const message = error instanceof Error ? (error.stack || error.message) : String(error)
     try {

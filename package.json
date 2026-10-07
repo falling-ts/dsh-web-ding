@@ -81,5 +81,8 @@
     "web-audio",
     "sound",
     "client"
-  ]
+  ],
+  "scripts": {
+    "test": "node tests/subagent.test.mjs && node tests/signal.test.mjs && node tests/schema.check.mjs"
+  }
 }

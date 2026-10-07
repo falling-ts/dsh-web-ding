@@ -12,9 +12,29 @@
  * live-data channel an independent plugin bundle can use.
  *
  * The `signal` payload is deliberately minimal:
- *   { phase: 'done', at: <monotonic epoch ms>, sessionId?: string, title?: string }
+ *   { phase: 'done', at, sessionId|null, title|null, subagent, depth }
  * `at` doubles as the sequence number — the client ignores any signal older
  * than the one it last played, so restarts and stale residue never re-ding.
+ *
+ * EVERY field is written on EVERY publish — never spread in conditionally.
+ * `settings.update` merges the patch into the namespace user layer with
+ * `mergeLayers` (deepseek-harness packages/settings/settings/src/index.ts),
+ * which recurses into plain objects and assigns ONLY the keys the patch itself
+ * carries; any key the patch omits INHERITS the previous publish's value
+ * instead of being cleared. Spreading `subagent` in only for children
+ * therefore latched `subagent: true` onto the namespace after the first child
+ * turn end, and every later ROOT turn end replayed it — the toast was badged
+ * `[子agent]` and (with subagentDistinctTone) the root ding played the child
+ * tone. Observed residue, 2026-10-07:
+ *   { phase, at: <root turn end>, sessionId: <root>, title: 'test',
+ *     depth: 0, subagent: true }
+ * The key order is the proof: a single publish of the old code put `subagent`
+ * BEFORE `depth` (that is the spread order of its object literal), and a merge
+ * keeps an existing key's position while appending new ones — so
+ * `depth` then `subagent` can only come from a root publish layered over an
+ * older child publish. `null` is the "absent" spelling: the client already
+ * typeof-guards `title` and `sessionId`, and `cloneJsonShaped` admits
+ * strings, booleans, finite numbers and `null` as write input.
  *
  * The session display title rides THIS payload instead of being fetched by the
  * browser (2026-09-30). The host is the only party that may read the
@@ -40,30 +60,60 @@ import { NS, SIGNAL_FIELD } from './settings.js'
 let lastAt = 0
 
 /**
+ * Build one COMPLETE `signal` payload for a single publish. Pure — the caller
+ * owns the monotonic `at` (publishDingSignal) and the settings write.
+ *
+ * Completeness IS the contract here, not a style choice: see the module doc.
+ * Every key below is present on the returned object, so the recursive merge
+ * inside `settings.update` can never inherit a previous publish's
+ * classification, title or session id.
+ * @param {string|undefined} sessionId the agent session id that went idle
+ * @param {string|undefined} title the session display title at that moment
+ *   (already resolved by the caller — see `hooks/idle.js`); `null` when unknown
+ * @param {{subagent?: boolean, depth?: number}|undefined} meta turn-end
+ *   classification for tone selection: `subagent` marks a delegated child
+ *   rather than the watched root, `depth` its delegation depth. Omit for an
+ *   unclassified turn end.
+ * @param {number} at the monotonic sequence stamp the caller resolved
+ * @returns {{phase: string, at: number, sessionId: string|null, title: string|null,
+ *   subagent: boolean, depth: number}}
+ */
+export function buildDingSignal(sessionId, title, meta, at) {
+  const classified = meta !== null && typeof meta === 'object' ? meta : undefined
+  const rawDepth = classified === undefined ? undefined : classified.depth
+  return {
+    phase: 'done',
+    at,
+    sessionId: typeof sessionId === 'string' && sessionId.trim() !== '' ? sessionId : null,
+    title: typeof title === 'string' && title.trim() !== '' ? title : null,
+    // A boolean, never absent: `false` is what CLEARS a previous child's flag
+    // through the recursive merge — omitting the key would inherit it.
+    subagent: classified !== undefined && classified.subagent === true,
+    depth: typeof rawDepth === 'number' && Number.isFinite(rawDepth)
+      ? Math.max(0, Math.trunc(rawDepth))
+      : 0,
+  }
+}
+
+/**
  * Publish one "agent finished" signal onto the `signal` field of the
  * `falling-ts-web-ding` namespace. THE host→browser delivery point.
  * @param {import('@deepseek-ai/cordis').Context} ctx
  * @param {string|undefined} sessionId the agent session id that just went idle
  * @param {string|undefined} title the session display title at that moment
- *   (already resolved by the caller — see `hooks/idle.js`; omitted when unknown,
- *   and the browser then renders the record without a title)
+ * @param {{subagent?: boolean, depth?: number}|undefined} meta turn-end
+ *   classification for tone selection
  * @returns {Promise<void>}
  */
 let warnedOnce = false
-export async function publishDingSignal(ctx, sessionId, title) {
+export async function publishDingSignal(ctx, sessionId, title, meta) {
   try {
     const settings = ctx.get('settings')
     if (settings === undefined || typeof settings.update !== 'function') return
     let at = Date.now()
     if (at <= lastAt) at = lastAt + 1
     lastAt = at
-    const signal = {
-      phase: 'done',
-      at,
-      ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
-      ...(typeof title === 'string' && title !== '' ? { title } : {}),
-    }
-    await settings.update(NS, { [SIGNAL_FIELD]: signal })
+    await settings.update(NS, { [SIGNAL_FIELD]: buildDingSignal(sessionId, title, meta, at) })
     if (!warnedOnce) {
       warnedOnce = true
       try {

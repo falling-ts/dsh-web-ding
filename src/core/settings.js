@@ -14,6 +14,14 @@
  *   publishing the signal, so the browser never hears a turn-end ding.
  *   `turnEndVolume` / `turnEndFreq` / `turnEndDecayMs` tune its tone.
  *
+ * Block 2 owns one further gate: SUBAGENT turn-end dings. A delegating parent
+ *   that fans out to N children produces N+1 idle transitions (one per child,
+ *   then the parent's own), and an untagged listener observes every one of
+ *   them, so the default is to stay silent for children. `subagentEnabled`
+ *   (boolean, default `false`) opens them; `subagentDistinctTone` (boolean,
+ *   default `false`) then gives children their own `subagentVolume` /
+ *   `subagentFreq` / `subagentDecayMs` instead of the parent's tone.
+ *
  * Per-block fields are mirrored (the same `volume` 0..1 / `freq` 80..4000 /
  * `decayMs` 100..4000 meanings as the original single block), so the two
  * dings can carry distinct pitches and loudness.
@@ -49,6 +57,17 @@ export const DEFAULTS = Object.freeze({
   turnEndVolume: 0.7,
   turnEndFreq: 880,
   turnEndDecayMs: 900,
+  // Block 2 gate: subagent (delegated child) turn ends. Off by default: a
+  // parent fan-out to N children yields N+1 idle transitions, and the extra
+  // N dings are noise for anyone who stepped away. Opting in still lets the
+  // child reuse the parent tone; `subagentDistinctTone` splits it off.
+  subagentEnabled: false,
+  subagentDistinctTone: false,
+  subagentVolume: 0.7,
+  // A musical octave below the 880 Hz parent default: same timbre, but it
+  // reads as in-progress rather than all-done.
+  subagentFreq: 440,
+  subagentDecayMs: 900,
 })
 
 /**
@@ -146,6 +165,12 @@ export async function buildConfigSchema() {
       turnEndVolume: z.number().default(DEFAULTS.turnEndVolume).volatile(),
       turnEndFreq: z.number().default(DEFAULTS.turnEndFreq).volatile(),
       turnEndDecayMs: z.number().default(DEFAULTS.turnEndDecayMs).volatile(),
+      // Block 2 gate: subagent (delegated child) turn ends.
+      subagentEnabled: z.boolean().default(DEFAULTS.subagentEnabled).volatile(),
+      subagentDistinctTone: z.boolean().default(DEFAULTS.subagentDistinctTone).volatile(),
+      subagentVolume: z.number().default(DEFAULTS.subagentVolume).volatile(),
+      subagentFreq: z.number().default(DEFAULTS.subagentFreq).volatile(),
+      subagentDecayMs: z.number().default(DEFAULTS.subagentDecayMs).volatile(),
       // TRANSIENT host→browser messenger (src/core/signal.js): host-written
       // { phase:'done', at, sessionId }. z.any() because the vendored
       // schemastery exposes only object/any/string/number/boolean/array.

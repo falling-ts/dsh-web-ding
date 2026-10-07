@@ -2,9 +2,11 @@
  * dsh-web-ding — a DSH Cordis function plugin.
  *
  * Announces the moment an agent finishes: the Host half listens for the
- * agent/status 'idle' TRANSITION (all turns done, including sub-agents, before
- * the next human turn) and publishes a tiny 'done' signal into the
- * `falling-ts-web-ding` settings namespace. The browser client half
+ * agent/status 'idle' TRANSITION (a top-level turn done before the next human
+ * turn) and publishes a tiny 'done' signal into the `falling-ts-web-ding`
+ * settings namespace. A delegated sub-agent (child) turn end is classified from
+ * its session header and, by default, stays silent — opt in via the settings
+ * form so a parent fan-out does not ding once per child. The browser client half
  * (web/client.js) mirrors that namespace live and answers the signal by
  * synthesizing a short "ding" with the Web Audio API — ENTIRELY front-end JS.
  *
@@ -15,7 +17,7 @@
  * - index.js              — this file; the Cordis plugin entry (listener registrations).
  * - core/settings.js      — the `falling-ts-web-ding` settings namespace (parameters + schema).
  * - core/signal.js        — the host→browser signal publisher (settings field write).
- * - hooks/idle.js         — the `agent/status` idle-transition observer.
+ * - hooks/idle.js         — the `agent/status` idle-transition observer (with the sub-agent gate).
  * - web/client.js         — the browser half: mirrors the namespace, plays the ding, registers a settings.section.
  *
  * @module @falling-ts/dsh-web-ding

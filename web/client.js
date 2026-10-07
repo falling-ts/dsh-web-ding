@@ -82,6 +82,16 @@ window.__ModuleLoader__.load({
       questionDesc: "harness 弹出用户选择题(浏览器对话区的选择题卡片)时播放一声“叮”,提醒你回来作答。检测走浏览器 DOM(QuestionComposer 的 data-question-key 锚点),宿主端不参与。",
       turnEndTitle: "回合结束",
       turnEndDesc: "agent 回合结束时(agent/status 转入 idle)播放一声“叮”。宿主只在命中 idle 转换时发信号,声音由浏览器合成。",
+      subagentEnable: "子 agent 完成时也提醒",
+      subagentEnableDesc: "委派出去的子 agent 跑完时是否也响一声。默认关闭:主 agent 派出 N 个子 agent 会产生 N+1 次完成事件,多出来的 N 声对离开页面的你就是噪音。打开后,主 agent 自己收尾时仍会再响一声(主音)。",
+      subagentDistinct: "子 agent 用独立音色",
+      subagentDistinctDesc: "给子 agent 一个和主音不同的音色(默认低八度),让你听得出这是「中间进展」还是「整体做完了」。关闭则子 agent 复用主音。",
+      subagentBadge: "子 agent",
+      subagentToast: "子 agent 完成了它的回合——浏览器播放一声“叮”。",
+      subagentToneTitle: "子 agent 音色",
+      previewMain: "试听（主音）",
+      subagentPreview: "试听（子 agent 音）",
+      previewCompare: "对比试听",
       autoplayNote: "浏览器自动播放策略:首次与页面交互(点击/按键)或点击任一试听后,提示音才会出声。",
       toastBody: "agent 已完成回合——浏览器播放一声“叮”。",
       doneTitle: "{title} 已完成",
@@ -108,6 +118,16 @@ window.__ModuleLoader__.load({
       questionDesc: "Plays a ding when the harness raises a user question (the question card in the browser conversation view), calling you back to answer. Detection runs on the browser DOM (the QuestionComposer data-question-key anchor); the host takes no part.",
       turnEndTitle: "Turn ended",
       turnEndDesc: "Plays a ding when the agent's turn ends (agent/status becomes idle). The host only signals the idle transition; the browser synthesizes the sound.",
+      subagentEnable: "Also ding for sub-agents",
+      subagentEnableDesc: "Whether a delegated sub-agent finishing also dings. Off by default: a parent that fans out to N children produces N+1 completion events, and the extra N are noise if you stepped away. When on, the parent still dings again (main tone) when it wraps up.",
+      subagentDistinct: "Separate tone for sub-agents",
+      subagentDistinctDesc: "Give sub-agents their own tone (an octave lower by default) so you can hear whether this is intermediate progress or the whole task finishing. Off reuses the main tone.",
+      subagentBadge: "Sub-agent",
+      subagentToast: "A sub-agent finished its turn — the browser played a ding.",
+      subagentToneTitle: "Sub-agent tone",
+      previewMain: "Preview (main tone)",
+      subagentPreview: "Preview (sub-agent tone)",
+      previewCompare: "Compare tones",
       autoplayNote: "Browser autoplay policy: sound starts only after your first interaction with the page (click or keypress) or after clicking either Preview.",
       toastBody: "The agent finished its turn — the browser played a ding.",
       doneTitle: "{title} — done",
@@ -134,6 +154,16 @@ window.__ModuleLoader__.load({
       questionDesc: "harness がユーザーへの質問(ブラウザの会話ビューに出る質問カード)を表示したときに「チン」と鳴らし、回答へ戻るきっかけを作ります。検出はブラウザの DOM(QuestionComposer の data-question-key アンカー)で行い、ホスト側は関与しません。",
       turnEndTitle: "ターン終了時",
       turnEndDesc: "agent のターンが終了したとき(agent/status が idle へ遷移)に「チン」と鳴らします。ホストは idle 遷移のシグナルだけを出し、音はブラウザが合成します。",
+      subagentEnable: "サブ agent 完了時も通知",
+      subagentEnableDesc: "委任したサブ agent が終わったときも鳴らすかどうか。既定はオフ:親が N 個の子に分岐すると完了イベントは N+1 回になり、離席中のあなたには余分な N 回がノイズになります。オンでも、親自身の完了時に改めて鳴ります(主音)。",
+      subagentDistinct: "サブ agent は別の音色",
+      subagentDistinctDesc: "サブ agent に主音とは別の音色(既定は 1 オクターブ下)を与え、「途中経過」か「全体完了」かを聞き分けられるようにします。オフなら主音を再利用します。",
+      subagentBadge: "サブ agent",
+      subagentToast: "サブ agent がターンを終えました——ブラウザが「チン」と鳴らしました。",
+      subagentToneTitle: "サブ agent の音色",
+      previewMain: "試聴（主音）",
+      subagentPreview: "試聴（サブ agent 音）",
+      previewCompare: "音色を比べる",
       autoplayNote: "ブラウザの自動再生ポリシー:ページを最初に操作する(クリック／キー入力)か、いずれかの試聴をクリックした後でないと音は鳴りません。",
       toastBody: "agent がターンを終了しました——ブラウザが「チン」と鳴らしました。",
       doneTitle: "{title} が完了しました",
@@ -160,6 +190,16 @@ window.__ModuleLoader__.load({
       questionDesc: "harness가 사용자 질문(브라우저 대화 영역의 질문 카드)을 띄울 때 '딩' 소리를 내어 답하러 돌아오게 합니다. 감지는 브라우저 DOM(QuestionComposer의 data-question-key 앵커)에서 하고 호스트는 관여하지 않습니다.",
       turnEndTitle: "턴 종료 시",
       turnEndDesc: "agent의 턴이 끝날 때(agent/status가 idle로 전환) '딩' 소리를 냅니다. 호스트는 idle 전환 신호만 보내고 소리는 브라우저가 합성합니다.",
+      subagentEnable: "하위 agent 완료 시에도 알림",
+      subagentEnableDesc: "위임된 하위 agent가 끝날 때도 소리를 낼지 여부. 기본은 꺼짐: 부모가 N개의 자식으로 분기하면 완료 이벤트가 N+1번 발생하고, 자리를 비운 당신에게 추가 N번은 소음입니다. 켜도 부모가 마무리될 때 다시 울립니다(주 음).",
+      subagentDistinct: "하위 agent는 별개 음색",
+      subagentDistinctDesc: "하위 agent에 주 음과 다른 음색(기본 한 옥타브 아래)을 주어, 이것이 중간 진행인지 전체 완료인지 들으로 구분하게 합니다. 끄면 주 음을 재사용합니다.",
+      subagentBadge: "하위 agent",
+      subagentToast: "하위 agent가 턴을 마쳤습니다——브라우저가 '딩' 소리를 재생했습니다.",
+      subagentToneTitle: "하위 agent 음색",
+      previewMain: "미리 듣기(주 음)",
+      subagentPreview: "미리 듣기(하위 agent 음)",
+      previewCompare: "음색 비교",
       autoplayNote: "브라우저 자동 재생 정책: 페이지를 처음 조작하거나(클릭/키 입력) 아무 미리 듣기나 클릭한 뒤에야 소리가 납니다.",
       toastBody: "agent가 턴을 마쳤습니다——브라우저가 '딩' 소리를 재생했습니다.",
       doneTitle: "{title} 완료",
@@ -339,8 +379,9 @@ window.__ModuleLoader__.load({
       notifyListeners.add(fn);
       return () => notifyListeners.delete(fn);
     }
-    /** 记录一条"回合结束"消息(同一 at 只记一次)。title 为会话标题(信号未携带时省略)。 */
-    function recordTurnEnd(at, sessionId, title) {
+    /** 记录一条"回合结束"消息(同一 at 只记一次)。title 为会话标题(信号未携带时省略)。
+     * `subagent` 标记该条来自被委派的子 agent(而非你在看的根会话)。 */
+    function recordTurnEnd(at, sessionId, title, subagent) {
       const list = loadNotifyCache();
       if (list.some((m) => m.at === at)) return;
       const d = new Date(at);
@@ -352,6 +393,7 @@ window.__ModuleLoader__.load({
         timeText,
         sessionId: typeof sessionId === "string" ? sessionId : undefined,
         title: typeof title === "string" && title.trim() ? title : undefined,
+        ...(subagent === true ? { subagent: true } : {}),
       });
       if (list.length > NOTIFY_CAP) list.length = NOTIFY_CAP;
       saveNotifyCache();
@@ -448,7 +490,11 @@ window.__ModuleLoader__.load({
       head.appendChild(title);
       head.appendChild(closeBtn);
       const text = document.createElement("div");
-      text.textContent = msg.title ? tr("doneTitle", { title: msg.title }) : tr("toastBody");
+      // 子 agent 的完成用另一句文案,并加一枚角标,和主会话收尾区分开。
+      const subLabel = msg.subagent === true ? tr("subagentBadge") : undefined;
+      text.textContent = subLabel !== undefined
+        ? "[" + subLabel + "] " + (msg.title ? tr("doneTitle", { title: msg.title }) : tr("subagentToast"))
+        : (msg.title ? tr("doneTitle", { title: msg.title }) : tr("toastBody"));
       Object.assign(text.style, { marginTop: 10, lineHeight: 1.65, color: "rgba(0,0,0,0.66)" });
       const foot = document.createElement("div");
       foot.textContent = timeText;
@@ -516,8 +562,9 @@ window.__ModuleLoader__.load({
         timeEl.textContent = m.timeText;
         Object.assign(timeEl.style, { fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" });
         const subEl = document.createElement("div");
-        subEl.textContent = m.title ? tr("doneTitle", { title: m.title })
-          : (m.sessionId ? tr("sessionLabel", { id: String(m.sessionId).slice(0, 12) }) : tr("turnEndTitle"));
+        const subPrefix = m.subagent === true ? "[" + tr("subagentBadge") + "] " : "";
+        subEl.textContent = subPrefix + (m.title ? tr("doneTitle", { title: m.title })
+          : (m.sessionId ? tr("sessionLabel", { id: String(m.sessionId).slice(0, 12) }) : tr("turnEndTitle")));
         Object.assign(subEl.style, { fontSize: 12.5, color: "rgba(0,0,0,0.5)", marginTop: 4 });
         info.appendChild(timeEl);
         info.appendChild(subEl);
@@ -647,14 +694,19 @@ window.__ModuleLoader__.load({
       if (!(at > lastAt)) return;
       lastAt = at;
       if (value.turnEndEnabled !== false) {
-        playDing({ volume: value.turnEndVolume, freq: value.turnEndFreq, decayMs: value.turnEndDecayMs });
+        // 子 agent 回合结束:选它的专属音色(默认关闭、默认同主音),否则用主音。
+        const isSub = sig.subagent === true;
+        const distinct = isSub && value.subagentDistinctTone === true;
+        playDing(distinct
+          ? { volume: value.subagentVolume, freq: value.subagentFreq, decayMs: value.subagentDecayMs }
+          : { volume: value.turnEndVolume, freq: value.turnEndFreq, decayMs: value.turnEndDecayMs });
         const sessionId = typeof sig.sessionId === "string" ? sig.sessionId : undefined;
         // 标题随信号一起来:Host 半部在 idle 转变时读 sessionProjections 的 title
         // 投影并写进 signal。客户端因此**不再**发任何 RPC(自铸 rpcId 取 session/list
         // 的写法已删除)——传输归 Connection,本半部只镜像本命名空间。
         const title = typeof sig.title === "string" && sig.title.trim() !== "" ? sig.title : undefined;
-        recordTurnEnd(at, sessionId, title);
-        showTurnEndToast({ at, sessionId, title });
+        recordTurnEnd(at, sessionId, title, isSub);
+        showTurnEndToast({ at, sessionId, title, subagent: isSub });
       }
     }
 
@@ -833,6 +885,13 @@ window.__ModuleLoader__.load({
         const Vol = "question" === blk ? "questionVolume" : "turnEndVolume";
         const Freq = "question" === blk ? "questionFreq" : "turnEndFreq";
         const Decay = "question" === blk ? "questionDecayMs" : "turnEndDecayMs";
+        // 预览行文案按块区分:回合结束块标明这是主音,和下面的子 agent 音预览区分开。
+        const previewLabel = "turnEnd" === blk ? tr("previewMain") : tr("preview");
+        // 子 agent 预览播的是“实际会响的声音”:独立音色开着才用子音参数,
+        // 否则子 agent 本来就复用主音,预览也播主音,不骗耳朵。
+        const subTone = () => (v.subagentDistinctTone === true
+          ? { volume: v.subagentVolume, freq: v.subagentFreq, decayMs: v.subagentDecayMs }
+          : { volume: v.turnEndVolume, freq: v.turnEndFreq, decayMs: v.turnEndDecayMs });
         return [
           h("h2", { key: blk + "-title", style: titleStyle }, title),
           h("p", { key: blk + "-intro", style: introStyle }, desc),
@@ -850,10 +909,64 @@ window.__ModuleLoader__.load({
           h(BufferedSlider, { key: blk + "-freq", labelText: tr("freq"), min: 120, max: 2000, step: 10, value: Number(v[Freq]) || 880, disabled: disabled, display: (n) => tr("unitHz", { value: Math.round(n) }), onSubmit: (n) => update(Freq, n) }),
           h(BufferedSlider, { key: blk + "-decay", labelText: tr("decay"), min: 100, max: 2000, step: 50, value: Number(v[Decay]) || 900, disabled: disabled, display: (n) => tr("unitMs", { value: Math.round(n) }), onSubmit: (n) => update(Decay, n) }),
           h("div", { key: blk + "-preview", style: lastRowStyle },
-            h("span", { style: labelStyle }, tr("preview")),
+            h("span", { style: labelStyle }, previewLabel),
             h("span", { style: controlStyle },
               h("button", { style: buttonStyle, disabled: disabled, onClick: previewBtn }, tr("playOnce"))),
           ),
+          // 子 agent 开关组:只在第二块(回合结束)里出现。
+          ...(blk === "turnEnd" ? [
+            h("div", { key: blk + "-sub-enable", style: rowStyle },
+              h("span", { style: labelStyle }, tr("subagentEnable")),
+              h("span", { style: controlStyle },
+                h("input", {
+                  type: "checkbox",
+                  checked: v.subagentEnabled === true,
+                  disabled: disabled,
+                  onChange: (ev) => update("subagentEnabled", ev.target.checked),
+                })),
+            ),
+            h("p", { key: blk + "-sub-enable-desc", style: { gridColumn: "1 / 3", color: hintColor, fontSize: 12, lineHeight: 1.55, margin: "0 0 6px" } },
+              tr("subagentEnableDesc")),
+            h("div", { key: blk + "-sub-distinct", style: rowStyle },
+              h("span", { style: labelStyle }, tr("subagentDistinct")),
+              h("span", { style: controlStyle },
+                h("input", {
+                  type: "checkbox",
+                  checked: v.subagentDistinctTone === true,
+                  disabled: disabled || v.subagentEnabled !== true,
+                  onChange: (ev) => update("subagentDistinctTone", ev.target.checked),
+                })),
+            ),
+            h("p", { key: blk + "-sub-distinct-desc", style: { gridColumn: "1 / 3", color: hintColor, fontSize: 12, lineHeight: 1.55, margin: "0 0 6px" } },
+              tr("subagentDistinctDesc")),
+            // 音色组只在"子 agent 真的会响"时才有意义:总闸(subagentEnabled)关着时
+            // 子 agent 一律静音,再展示音色滑杆只会让人以为它生效。此前只看
+            // subagentDistinctTone,于是"先勾启用→再勾独立音色→取消启用"会留下
+            // {enabled:false, distinct:true} 的搁浅态,并照常渲染整个音色区。
+            ...(v.subagentEnabled === true && v.subagentDistinctTone === true ? [
+              h("h3", { key: blk + "-sub-tone-title", style: { gridColumn: "1 / 3", fontSize: 13, fontWeight: 600, margin: "6px 0 0" } },
+                tr("subagentToneTitle")),
+              h(BufferedSlider, { key: blk + "-sub-vol", labelText: tr("volume"), min: 0, max: 1, step: 0.05, value: Number(v.subagentVolume) || 0.7, disabled: disabled, display: pct, onSubmit: (n) => update("subagentVolume", n) }),
+              h(BufferedSlider, { key: blk + "-sub-freq", labelText: tr("freq"), min: 120, max: 2000, step: 10, value: Number(v.subagentFreq) || 440, disabled: disabled, display: (n) => tr("unitHz", { value: Math.round(n) }), onSubmit: (n) => update("subagentFreq", n) }),
+              h(BufferedSlider, { key: blk + "-sub-decay", labelText: tr("decay"), min: 100, max: 2000, step: 50, value: Number(v.subagentDecayMs) || 900, disabled: disabled, display: (n) => tr("unitMs", { value: Math.round(n) }), onSubmit: (n) => update("subagentDecayMs", n) }),
+              h("div", { key: blk + "-sub-preview", style: rowStyle },
+                h("span", { style: labelStyle }, tr("subagentPreview")),
+                h("span", { style: controlStyle },
+                  h("button", { style: buttonStyle, disabled: disabled, onClick: () => play(subTone()) }, tr("playOnce"))),
+              ),
+              // 对比试听:先主音,隔 0.8s 再子 agent 音——一次点击分辨两种音色。
+              // 此行走的是「独立音色已开」的分支:关闭时两种声音本来就相同,整行不渲染,
+              // 所以 disabled 只跟随表单可写性,不必再判一次 subagentDistinctTone。
+              h("div", { key: blk + "-sub-compare", style: lastRowStyle },
+                h("span", { style: labelStyle }, tr("previewCompare")),
+                h("span", { style: controlStyle },
+                  h("button", { style: buttonStyle, disabled: disabled, onClick: () => {
+                    play({ volume: v.turnEndVolume, freq: v.turnEndFreq, decayMs: v.turnEndDecayMs });
+                    window.setTimeout(() => play(subTone()), 800);
+                  } }, tr("playOnce"))),
+              ),
+            ] : []),
+          ] : []),
         ];
       };
       return h("div", { style: wrapStyle },

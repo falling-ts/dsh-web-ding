@@ -14,8 +14,8 @@ a pure-listener Host half + a browser client half connected by the official
 
 | Layer | What happens |
 |-------|--------------|
-| Host (`index.js` + `src/`) | Listens for the `agent/status` **idle transition** (all turns done, including sub-agents, before the next human turn; a fresh idle session that never ran, and repeated idle ticks, stay silent). Publishes `{ phase:'done', at, sessionId, title }` into the `falling-ts-web-ding` settings namespace — `title` is read here from the official `sessionProjections` `title` unit, so the browser never has to fetch it. Never emits audio, never calls the OS. |
-| Browser (`web/client.js`) | Mirrors the namespace live via `configForms`. On a strictly-newer `done` signal it synthesizes a short `ding` (three sine oscillators + exponential decay envelopes) with the Web Audio API and plays it through the tab — and, at the same moment, pops a Win11-style toast in the bottom-right corner. Clicking the toast slides in a notification drawer listing every turn-end message (kept in browser `localStorage`, capped at 100, deduped by signal `at`), with per-message delete and a clear-all button. Everything stays front-end: no backend audio, no OS notification. |
+| Host (`index.js` + `src/`) | Listens for the `agent/status` **idle transition** (all turns done before the next human turn; a fresh idle session that never ran, and repeated idle ticks, stay silent). Sub-agent (delegated child) turn ends are classified from the persisted session header and suppressed unless you opt in. Publishes a **complete** `{ phase:'done', at, sessionId, title, subagent, depth }` (absent values are `null`/`false`/`0`, never omitted — see below) into the `falling-ts-web-ding` settings namespace — `title` is read here from the official `sessionProjections` `title` unit, so the browser never has to fetch it. Never emits audio, never calls the OS. |
+| Browser (`web/client.js`) | Mirrors the namespace live via `configForms`. On a strictly-newer `done` signal it synthesizes a short `ding` (three sine oscillators + exponential decay envelopes) with the Web Audio API and plays it through the tab — using the sub-agent tone when the signal is flagged `subagent` and a distinct tone is enabled — and, at the same moment, pops a Win11-style toast in the bottom-right corner. Clicking the toast slides in a notification drawer listing every turn-end message (kept in browser `localStorage`, capped at 100, deduped by signal `at`), with per-message delete and a clear-all button. Everything stays front-end: no backend audio, no OS notification. |
 
 ## Install
 
@@ -43,9 +43,17 @@ question frame, so this block is entirely browser-side.
 | `questionDecayMs` | number 100..4000 | `900` | Tone decay length (ms). |
 
 **Block 2 — 回合结束 (turn-end ding)** — the classic agent/status idle-transition
-tone. The Host observes `agent/status`; on the idle transition (all turns done,
-including sub-agents, before the next human turn; fresh sessions that never ran
-and repeated idle ticks stay silent) it publishes the `done` signal.
+tone. The Host observes `agent/status`; on the idle transition (a top-level turn
+done before the next human turn; fresh sessions that never ran and repeated idle
+ticks stay silent) it publishes the `done` signal.
+
+> **Behaviour change (v0.7.0).** Until now the turn-end ding fired on *every*
+> idle transition, including a delegated sub-agent's — so a parent that fanned
+> out to N children rang N+1 times. Sub-agent turn ends are now classified and
+> suppressed by default (`subagentEnabled: false`), which means **a sub-agent
+> finishing on its own no longer dings**; the parent still dings when it wraps
+> up. Set `subagentEnabled: true` to restore the old "every turn end rings"
+> behaviour (optionally with a distinct sub-agent tone).
 
 | Field | Type | Default | Meaning |
 |-------|------|---------|---------|
@@ -53,6 +61,39 @@ and repeated idle ticks stay silent) it publishes the `done` signal.
 | `turnEndVolume` | number 0..1 | `0.7` | Web Audio playback gain. |
 | `turnEndFreq` | number 80..4000 | `880` | Fundamental frequency of the ding (Hz). |
 | `turnEndDecayMs` | number 100..4000 | `900` | Tone decay length (ms). |
+
+
+**Block 2 gate — sub-agent turn ends.** `agent/status` is scope-filtered, but
+the filter only narrows downward: a listener on an untagged root context is
+admitted for every dispatch key, so this plugin observes the idle transition
+of every child a parent delegates to. A parent that fans out to N children
+therefore produces N+1 turn-end signals — one per child, then the parent's own.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `subagentEnabled` | boolean | `false` | Also ding when a delegated sub-agent finishes. Off by default: the extra N dings are noise if you stepped away. When on, the parent still dings again (main tone) when it wraps up. |
+| `subagentDistinctTone` | boolean | `false` | Give sub-agents their own tone instead of reusing the main one. |
+| `subagentVolume` | number 0..1 | `0.7` | Web Audio gain for the sub-agent ding. |
+| `subagentFreq` | number 80..4000 | `440` | Fundamental frequency of the sub-agent ding (Hz) — one octave below the main default, so it reads as in-progress rather than all-done. |
+| `subagentDecayMs` | number 100..4000 | `900` | Sub-agent tone decay length (ms). |
+
+A child is identified from its **persisted** session header — either
+`origin === 'subagent'` or `delegationDepth > 0` — so the classification
+survives restart and resume. The two markers are accepted independently because
+not every child creation path stamps both. `parentSession` alone is
+deliberately NOT treated as delegation: a session **fork** also carries it, and
+a fork is a new independent root, not a child.
+
+**Every publish writes every field (fixed 2026-10-07).** `settings.update` is a
+**recursive merge**, not a replace (`mergeLayers` in deepseek-harness
+`packages/settings/settings/src/index.ts`): it copies the stored section and
+assigns only the keys the patch itself carries, so an omitted key INHERITS the
+previous publish instead of being cleared. The old payload spread `subagent` in
+only for children, which latched `subagent: true` onto the namespace after the
+first child turn end — every later **root** turn end replayed it, badging the
+toast `[子agent]` (and, with `subagentDistinctTone`, playing the child tone for
+the root ding). `buildDingSignal` now always returns the full payload. Gate:
+`node tests/signal.test.mjs`.
 
 Besides the ring, each turn end drops a bottom-right toast (Win11-style,
 auto-dismisses after 6 s). Click it to open the right-side notification

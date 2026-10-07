@@ -29,10 +29,26 @@
 ## Host→浏览器通道(signal 字段)
 
 `falling-ts-web-ding.signal` 是**插件私有的瞬态信使**,完全复刻 dsh-force-compact
-的 `liveUi` 通道模式:宿主唯一写入方、客户端只读、故意与其它字段一样持久化到
-`settings.yaml`(无害残留——见下文首帧语义)。载荷是
-**`{ phase:'done', at, sessionId?, title? }`**;`at` 兼作序号:`Date.now()` 上叠加进程内
-单调高水位,避免同毫秒连续两次 idle 的序号碰撞。客户端仅在 `at > 本页面最后播放的 at` 时响应。
+的 `liveUi` 通道模式:宿主唯一写入方、客户端只读、与其它字段一样持久化到 profile 的
+`cordis.patch.yml`。载荷是
+**`{ phase:'done', at, sessionId|null, title|null, subagent:boolean, depth:number }`**;
+`at` 兼作序号:`Date.now()` 上叠加进程内单调高水位,避免同毫秒连续两次 idle 的序号碰撞。
+客户端仅在 `at > 本页面最后播放的 at` 时响应。
+
+**每次发布必须写全字段(2026-10-07 修复;此前"省略即清空"的假设是错的)** ——
+`settings.update` 是**递归合并**而非替换:`packages/settings/settings/src/index.ts` 的
+`mergeLayers` 先 `{ ...under }`、再只赋值补丁自己携带的键,于是**补丁省略的键会继承上一次
+发布的值,而不是被清空**。旧实现把 `subagent` 只在子 agent 时 spread 进来、其余时刻省略,
+所以第一次子 agent 回合结束就把 `subagent: true` **latch** 在该命名空间上,之后每一次
+**主 agent** 的回合结束都复用它:右下角 toast 被打上 `[子agent]` 角标,且开启
+`subagentDistinctTone` 时主音还会被换成子音。实机残留(2026-10-07):
+`{ phase, at: <主 agent 回合结束>, sessionId: <主会话>, title:'test', depth: 0, subagent: true }`
+—— **键序就是证据**:旧代码单次发布的键序是 `subagent` 在 `depth` **之前**(对象字面量的
+spread 顺序,见 `git show HEAD:src/core/signal.js`),而合并保留既有键的位置、只把新键追加到
+尾部,故 `depth` 在前、`subagent` 在后只可能来自"主 agent 发布盖在更早的子 agent 发布之上"。
+现在 `buildDingSignal` 每次返回**完整**载荷,缺省值写 `null`/`false`/`0`(客户端对 `title`/
+`sessionId` 本就做 typeof 判定,`cloneJsonShaped` 接受字符串/布尔/有限数/`null`);回归闸门是
+`node tests/signal.test.mjs`(内含 `mergeLayers` 的真实移植 + 控制组)。
 
 **会话标题随信号走(2026-09-30 改)** —— `title` 由 **Host** 半部在 idle 转变时从
 `ctx.get('sessionProjections').snapshot(session).values.title`(官方 `title` 投影单元,
@@ -302,7 +318,11 @@ package.json 里那一整段 npm 描述。现在 `locale/{en,zh}.json` 的 `meta
    折中。**风险登记**:该锚点属宿主内部实现,上游一改这块就静默失效;`wd-ding-trigger-probe.mjs`
    与 `wd-audio-unlock-apply-probe.mjs` 是它的回归闸门。
 3. **回合结束判据用 `agent/status` 的 idle 转变**(不是 durable 的 `turn/end`):`practices.md`
-   偏好 durable 事件,但本插件要的语义是"含子代理在内所有回合都结束、且下一个人类回合之前",
+   偏好 durable 事件,但本插件要的语义是"顶层回合结束、且下一个人类回合之前"。被委派的子
+   agent 的 idle 转变**也**会到达本监听器(`agent/status` 是 scope 过滤的,但过滤只向下收窄:
+   未打 tag 的监听器对所有 dispatch key 放行),故由 `classifyAgent` 按持久化 session header
+   识别并按 `subagentEnabled`(默认 `false`)静音——**v0.7.0 起默认不再为子 agent 单独响**
+   (此前"含子代理在内所有回合都结束"的旧语义已废止,见 README 的行为变更说明)。
    `turn/end` 会每回合响一次。这是**监听事件、不是轮询**(规范禁的是轮询)。
 4. **peer 只声明 `peerDependencies`(+ optional meta),不声明 `devDependencies`**:
    `publish.zh.md` 建议共享宿主实例的 dsh 包同时进 peer 与 dev;本插件是 plain JS、无类型检查
