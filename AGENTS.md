@@ -99,6 +99,30 @@ peer 清单按**实际用到的包**声明(除 cordis 外全部 `optional`):`dsh
 端到端验证(0.1.7-alpha.2):`settings/describe` 出现 `falling-ts-web-ding`
 (`autoGenerate=false`,9 个字段——含宿主写的瞬态 `signal`),跑一轮后 `signal` 成功写入 profile 配置。
 
+## harness 0.2.1-rc.2 适配（2026-10-19）：零改动
+
+peer 下界升至 **`>=0.2.1-rc.1`**（0.2.1 列车），cordis `>=4.0.5`、schemastery `>=3.18.5`。
+换车理由同其它插件：`peer-range-probe.mjs` 要求声明的列车下界与 checkout 同列车。
+
+本插件依赖的缝在 0.2.1 上**逐条都在**，源码无需改动：
+
+- `settings.update(ns, patch)`、`settings.describe()`、`settings/document-updated` 广播
+  （仍在 `API_REMOTE_FORWARDED_EVENTS` 白名单里）；
+- 客户端 `ctx.configForms.get` + `ConfigForm` 五方法（`getSnapshot`/`subscribe`/`set`/
+  `unset`/`mutate`；状态枚举仍是 `'loading'|'ready'|'unavailable'`）；
+- `ctx.slots.inject('settings.section')`（仍 `kind:'list'; scope:'root'`）、`ctx.locale`、
+  `createSnapshotStore`；`dsh.client` 清单字段；
+- `agent/status`（同步、`{agent,status}`、`'idle'`）；
+- question 块的 DOM 锚点 `data-question-key` 仍在；
+- `sessionProjections.snapshot(session).values.title`（信号的 `title` 来源）未变。
+
+端到端复核（3099 实例，`DSH_HOME=~/.dsh-web`，0.2.1-rc.2）：
+`node exploration/wd-ding-trigger-probe.mjs 3099` **全部通过**——按真实 host 路径写
+`signal`（含 `title`）→ 页面调度 3 个振荡器 + toast + 缓存。这是五个插件里**唯一一条
+纯活体端到端全绿**的证据，说明 Host→settings→浏览器镜像→Web Audio 整条链在 0.2.1 上完好。
+`pluginInventory/list` 中 `include:falling-ts-web-ding` 为 `enabled:true` /
+`fiberPhase:active`；`settings/describe` 出现 `falling-ts-web-ding`（`applies: live`）。
+
 ## harness 0.2.0-rc.2 复核（2026-09-30）：零改动
 
 peer 下界保持 `>=0.2.0-rc.1`（0.2.0 列车；rc.1 → rc.2 是同列车补丁，纯下界本就不该收窄——
