@@ -99,6 +99,38 @@ peer 清单按**实际用到的包**声明(除 cordis 外全部 `optional`):`dsh
 端到端验证(0.1.7-alpha.2):`settings/describe` 出现 `falling-ts-web-ding`
 (`autoGenerate=false`,9 个字段——含宿主写的瞬态 `signal`),跑一轮后 `signal` 成功写入 profile 配置。
 
+## harness 0.2.1-rc.3 适配（2026-10-24）：零改动
+
+上游 `687f282e86`（rc.2）→ `22ddee3792`（master HEAD，`dsh-v0.2.1-rc.3-1533-g22ddee3792`），
+**1539 个提交**；列车仍是 **0.2.1**（rc.2 → rc.3），cordis `4.0.5` / schemastery `3.18.5`
+未变 → peer 下界 **`>=0.2.1-rc.1` 不动**。
+
+逐缝核对（**全部仍在**，源码无需改动）：
+
+- `agent/status`（同步、`{agent,status}`、`'idle'`）签名与派发方式逐字未变；
+- `settings.update(ns, patch)` / `settings.describe()` / `settings/document-updated` 广播
+  （仍在 `API_REMOTE_FORWARDED_EVENTS` 白名单里）；
+- `sessionProjections.snapshot(session).values.title`（信号的 `title` 来源）未变——
+  `session-projection` 包这轮改动很大（21 文件 / +1281），但都是**新增**
+  `ProjectionHandle` / `ProjectionKeySelection` / `SessionProjectionSummary*` 一族类型，
+  `snapshot()` 读取路径与 `values` 结构未变；
+- 客户端 `ctx.configForms.get` + `ConfigForm` 五方法、`ctx.slots.inject('settings.section')`
+  （仍 `kind:'list'; scope:'root'`）、`ctx.locale.bind/register/addLanguage`
+  （`LOCALE_IDS` 仍 `['zh','en']`）、`createSnapshotStore` 均未变；
+- question 块的 DOM 锚点 `data-question-key` 仍在（本插件登记在案的宿主内部依赖，
+  探针覆盖）。
+
+端到端复核（3099 隔离实例，`DSH_HOME=~/.dsh-web`，0.2.1-rc.3）：
+`node exploration/wd-ding-trigger-probe.mjs 3099` **ALL CHECKS PASSED**——按真实 host 路径
+写 `signal`（含 `title`）→ 页面调度 3 个振荡器 + toast + 缓存，整条
+Host→settings→浏览器镜像→Web Audio 链在 rc.3 上完好（唯一输出是浏览器那条
+AudioContext autoplay 警告，属策略提示，非失败）。
+`settings/describe` 里 `falling-ts-web-ding` 的 `signal` 字段记录到**真实回合**产生的
+`{phase:"done", at:…, sessionId:"session-…", title:"…"}`，证明 idle 转变判定未被新版改动打断；
+`pluginInventory/list` 中 `include:falling-ts-web-ding` 为 `enabled:true` / `fiberPhase:active`。
+**探针注意**：该探针默认端口是 3080；不带参数对着没有实例的端口跑会得到
+"Failed to load plugins"式假失败，请显式传端口。
+
 ## harness 0.2.1-rc.2 适配（2026-10-19）：零改动
 
 peer 下界升至 **`>=0.2.1-rc.1`**（0.2.1 列车），cordis `>=4.0.5`、schemastery `>=3.18.5`。
