@@ -99,6 +99,33 @@ peer 清单按**实际用到的包**声明(除 cordis 外全部 `optional`):`dsh
 端到端验证(0.1.7-alpha.2):`settings/describe` 出现 `falling-ts-web-ding`
 (`autoGenerate=false`,9 个字段——含宿主写的瞬态 `signal`),跑一轮后 `signal` 成功写入 profile 配置。
 
+## harness 0.2.1-rc.5 适配（2026-10-30）：零改动
+
+基线切到 **`dsh-v0.2.1-rc.5`**（`b830ec950f`，页面版本串 `0.2.1-rc.5-b830ec9`）——`next`
+dist-tag 所指版本，是**从 rc.3 tag 拉出的 release 分支**（只多 13 个修复提交），
+不含 master 上 rc.3 之后的 1500+ 提交（那条线已到 `0.2.2-alpha.2`）。上一节提到 master
+给 `agent/pre-step` 加了 `modelSelection`，rc.5 上**没有**它
+（`core/agent/src/runtime-types.ts:320` 的载荷仍是 `{agent, messages, turn, step, signal}`），
+与本插件无关。
+
+逐缝核对（**全部仍在**，源码无需改动）：
+
+- `agent/status`（同步、`{agent,status}`、`'idle'`，`runtime-types.ts:280`）签名与派发方式未变；
+- `settings.update(ns, patch)` / `settings.describe()` / `settings/document-updated` 广播
+  （仍在 `API_REMOTE_FORWARDED_EVENTS` 白名单里）；
+- `sessionProjections.snapshot(session).values.title`（信号的 `title` 来源）未变；
+- 客户端 `ctx.configForms.get` + `ConfigForm` 五方法、`ctx.slots.inject('settings.section')`
+  （仍 `kind:'list'; scope:'root'`）、`ctx.locale.bind/register/addLanguage`、
+  `createSnapshotStore` 均未变；
+- question 块登记的宿主内部锚点 `data-question-key` 仍在（本插件登记在案的依赖）。
+
+端到端复核（3099 隔离实例，`DSH_HOME=~/.dsh-web`，0.2.1-rc.5）：
+`node exploration/wd-ding-trigger-probe.mjs 3099` **ALL CHECKS PASSED**——按真实 host 路径
+写 `signal`（含 `title`）→ 页面调度 3 个振荡器 + toast + 缓存，整条
+Host→settings→浏览器镜像→Web Audio 链在 rc.5 上完好。
+`node exploration/fc-settings-nav-icon-live-probe.mjs 3099` **28 项全绿**——本插件的
+`data-wd-nav-icon` 认领与 mask 绘制都在。
+
 ## harness 0.2.1-rc.3 适配（2026-10-24）：零改动
 
 上游 `687f282e86`（rc.2）→ `22ddee3792`（master HEAD，`dsh-v0.2.1-rc.3-1533-g22ddee3792`），
